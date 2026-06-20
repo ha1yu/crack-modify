@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"crack-modify/internal/utils"
 	"crack-modify/pkg/crack/plugins"
 
 	"github.com/cheggaaa/pb/v3"
@@ -30,6 +29,23 @@ type Runner struct {
 }
 
 func NewRunner(options *Options) (*Runner, error) {
+	// 边界值兜底, 避免非法参数导致死锁或未定义行为:
+	//   Threads < 1 会让 taskChan 容量为 0 且不启动 worker → 生产者入队死锁
+	//   Threads 过大会瞬间开出海量 goroutine
+	//   Timeout < 1 会让 net.DialTimeout(...,0) 行为未定义
+	//   Delay  为负无意义
+	if options.Threads < 1 {
+		options.Threads = 1
+	}
+	if options.Threads > 1000 {
+		options.Threads = 1000
+	}
+	if options.Timeout < 1 {
+		options.Timeout = 10
+	}
+	if options.Delay < 0 {
+		options.Delay = 0
+	}
 	if len(options.UserMap) == 0 {
 		options.UserMap = userMap
 	}
@@ -67,8 +83,8 @@ func (r *Runner) Crack(addr *IpAddr, userDict []string, passDict []string) (resu
 	gologger.Info().Msgf("开始爆破: %v:%v %v", addr.Ip, addr.Port, addr.Protocol)
 
 	var tasks []plugins.Service
-	var taskHash string
-	taskHashMap := map[string]bool{}
+	// P3: 去重改用字符串 key(无需密码学哈希), \x00 分隔避免 ("ab","c") 与 ("a","bc") 碰撞
+	taskSet := map[string]struct{}{}
 	// GenTask
 	if len(userDict) == 0 {
 		userDict = r.options.UserMap[addr.Protocol]
@@ -82,11 +98,11 @@ func (r *Runner) Crack(addr *IpAddr, userDict []string, passDict []string) (resu
 			// 替换{user}
 			pass = strings.ReplaceAll(pass, "{user}", user)
 			// 任务去重
-			taskHash = utils.Md5(fmt.Sprintf("%v%v%v%v%v", addr.Ip, addr.Port, addr.Protocol, user, pass))
-			if taskHashMap[taskHash] {
+			dedupKey := user + "\x00" + pass
+			if _, ok := taskSet[dedupKey]; ok {
 				continue
 			}
-			taskHashMap[taskHash] = true
+			taskSet[dedupKey] = struct{}{}
 			tasks = append(tasks, plugins.Service{
 				Ip:       addr.Ip,
 				Port:     addr.Port,
@@ -98,20 +114,37 @@ func (r *Runner) Crack(addr *IpAddr, userDict []string, passDict []string) (resu
 		}
 	}
 	// RunTask
+	// P3: stopMap 直接以 addrStr 作 key, 省去每任务一次 MD5
+	addrStr := fmt.Sprintf("%v:%v", addr.Ip, addr.Port)
 	stopMap := cmap.New[string]()
 	mutex := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 	taskChan := make(chan plugins.Service, r.options.Threads)
+
+	// P1: 全局限速 gate。Delay>0 时, 所有 worker 共享一个 ticker,
+	// 每次请求前取一个令牌 → 整体速率被限制为 1 req / Delay 秒(真正的"请求间隔"语义),
+	// 而非旧的每 worker 各自 sleep(实际速率 = Threads/Delay)。
+	var gate <-chan time.Time
+	if r.options.Delay > 0 {
+		ticker := time.NewTicker(time.Duration(r.options.Delay) * time.Second)
+		defer ticker.Stop()
+		gate = ticker.C
+	}
+
+	bar := pb.StartNew(len(tasks))
 	for i := 0; i < r.options.Threads; i++ {
 		go func() {
 			for task := range taskChan {
-				addrStr := fmt.Sprintf("%v:%v", addr.Ip, addr.Port)
 				userPass := fmt.Sprintf("%v:%v", task.User, task.Pass)
-				addrHash := utils.Md5(addrStr)
 				// 判断是否已经停止爆破
-				if stopMap.Has(addrHash) {
+				if stopMap.Has(addrStr) {
+					bar.Increment() // B5: 进度按"已完成"计, 含被跳过的任务
 					wg.Done()
 					continue
+				}
+				// P1: 限速 — 等待全局令牌(在 scanFunc 之前, 保证请求间隔)
+				if gate != nil {
+					<-gate
 				}
 				gologger.Debug().Msgf("[trying] %v", userPass)
 				scanFunc := plugins.ScanFuncMap[task.Protocol]
@@ -119,7 +152,7 @@ func (r *Runner) Crack(addr *IpAddr, userDict []string, passDict []string) (resu
 				switch resp {
 				case plugins.CrackSuccess:
 					if !r.options.CrackAll {
-						stopMap.Set(addrHash, "ok")
+						stopMap.Set(addrStr, "ok")
 					}
 					gologger.Silent().Msgf("%v -> %v %v", addr.Protocol, addrStr, userPass)
 					mutex.Lock()
@@ -130,23 +163,20 @@ func (r *Runner) Crack(addr *IpAddr, userDict []string, passDict []string) (resu
 					})
 					mutex.Unlock()
 				case plugins.CrackError:
-					stopMap.Set(addrHash, "ok")
+					stopMap.Set(addrStr, "ok")
 					gologger.Debug().Msgf("crack err, %v", err)
 				case plugins.CrackFail:
 				}
-				if r.options.Delay > 0 {
-					time.Sleep(time.Duration(r.options.Delay) * time.Second)
-				}
+				bar.Increment() // B5: 进度按 worker 完成计, 而非生产者入队
 				wg.Done()
 			}
 		}()
 	}
 
-	bar := pb.StartNew(len(tasks))
+	// B5: 生产者只负责入队, 不再 Increment(进度条移到 worker 完成处)
 	for _, task := range tasks {
 		wg.Add(1)
 		taskChan <- task
-		bar.Increment()
 	}
 	close(taskChan)
 	wg.Wait()

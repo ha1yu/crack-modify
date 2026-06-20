@@ -1,8 +1,12 @@
 package crack
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
+
+	"crack-modify/pkg/crack/plugins"
 )
 
 // TestParseTargets 覆盖两种目标格式以及各种非法输入的跳过逻辑。
@@ -202,6 +206,50 @@ func TestNewRunnerKeepsExplicit(t *testing.T) {
 	}
 	if !reflect.DeepEqual(r.options.TemplatePass, tmplPass) {
 		t.Error("NewRunner overwrote explicit TemplatePass")
+	}
+}
+
+// TestNewRunnerClampsInvalidOptions 验证 B1 修复:
+// Threads<1(会死锁)/Threads 过大/Timeout<1(未定义)/Delay<0 都应被兜底到合法范围。
+func TestNewRunnerClampsInvalidOptions(t *testing.T) {
+	r, err := NewRunner(&Options{
+		Threads: 0,    // 非法: 会造成 channel 容量 0 + 无 worker 死锁
+		Timeout: 0,    // 非法: net.DialTimeout(...,0) 行为未定义
+		Delay:   -5,   // 非法: 负值无意义
+	})
+	if err != nil {
+		t.Fatalf("NewRunner() error: %v", err)
+	}
+	if r.options.Threads < 1 {
+		t.Errorf("Threads = %d, want >= 1 (clamp)", r.options.Threads)
+	}
+	if r.options.Timeout < 1 {
+		t.Errorf("Timeout = %d, want >= 1 (clamp)", r.options.Timeout)
+	}
+	if r.options.Delay < 0 {
+		t.Errorf("Delay = %d, want >= 0 (clamp)", r.options.Delay)
+	}
+
+	// 关键: Threads<1 兜底后 Run 不应死锁, 应正常完成
+	// 用未导出的 mock 不可行(本文件是 package crack 但 mock helper 在 engine_test),
+	// 这里直接用 ScanFuncMap 注入一个 fake(同 withMockPlugin 思路) + 死端口。
+	orig := plugins.ScanFuncMap["mysql"]
+	plugins.ScanFuncMap["mysql"] = func(s *plugins.Service) (int, error) {
+		return plugins.CrackError, fmt.Errorf("test")
+	}
+	defer func() { plugins.ScanFuncMap["mysql"] = orig }()
+
+	done := make(chan struct{})
+	go func() {
+		addrs := []*IpAddr{{Ip: "127.0.0.1", Port: 3306, Protocol: "mysql"}}
+		r.Run(addrs, []string{"root"}, []string{"p1", "p2"})
+		close(done)
+	}()
+	select {
+	case <-done:
+		// 正常完成, 未死锁
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run with clamped Threads<1 deadlocked (B1 regression)")
 	}
 }
 

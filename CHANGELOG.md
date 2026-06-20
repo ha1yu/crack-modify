@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 变更（引擎优化与修复）
+
+针对爆破引擎 `pkg/crack/runner.go` 的 4 项正确性/性能修复：
+
+- **B1（健壮性，高危）**：`NewRunner` 对 `Threads`/`Timeout`/`Delay` 做边界兜底。原 `--threads 0` 会让 `taskChan` 容量为 0 且不启动任何 worker，导致生产者入队永久死锁；`--timeout 0` 使 `net.DialTimeout(...,0)` 行为未定义。现：`Threads<1→1`、`Threads>1000→1000`、`Timeout<1→10`、`Delay<0→0`。
+- **P1（限速语义，安全相关）**：`Delay` 限速改用全局 `time.Ticker` gate。原实现在每个 worker 内 `time.Sleep(Delay)`，多 worker 并行下实际请求速率 = `Threads/Delay`（如 `--threads 10 --delay 2` 用户以为 2 秒/次，实际 5 次/秒），限速形同虚设。现所有 worker 共享一个 ticker，请求前取令牌，整体速率严格限制为 `1 req / Delay 秒`，符合"请求间隔"语义。**注意：这是预期行为变化，`Delay>0` 时总耗时会变长（即正确的限速效果）。**
+- **P3（性能）**：任务去重去掉每任务一次的 `MD5(Sprintf(...))`，改用 `map[string]struct{}` 以 `user+"\x00"+pass` 为 key（去重无需密码学强度）；`stopMap` 的 key 也从每任务 `Md5(addrStr)` 改为直接用 `addrStr`（整个 `Crack` 内不变，无需重复计算）。大字典场景（万元组）开销显著下降。
+- **B5（体验）**：进度条 `bar.Increment()` 从生产者入队循环移到 worker 完成处（含被 `stopMap` 跳过的任务）。原进度条到 100% 只表示"全部已入队"，不代表完成；现反映真实完成进度。
+
 ### 新增（测试）
 
 - **L6 Docker 真实服务集成测试** `pkg/crack/plugins/docker_test.go`：通过环境变量 `CRACK_DOCKER_TEST=1` 显式开启（默认与 `-short` 模式均跳过），对 10 个协议的真实容器验证 success/fail/error 三态：`mysql`、`postgres`、`mssql`、`redis`、`memcached`、`ftp`、`ssh`、`mongodb`(3.6 兼容 mgo)、`oracle`(XE)、`smb`。`wmi`/`wmihash`/`rdp` 因需 Windows 目标未纳入。

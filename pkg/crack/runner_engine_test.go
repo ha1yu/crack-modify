@@ -3,6 +3,7 @@ package crack
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -183,15 +184,13 @@ func TestRunStopsOnError(t *testing.T) {
 	}
 }
 
-// TestRunDelayThrottles 验证 Delay>0 时按任务数限速: 总耗时 >= delay*任务数/并发近似。
-// 用短 delay (各 50ms) 保证测试快速。
+// TestRunDelayThrottles 验证 Delay>0 时全局限速语义:
+// P1 修复后, 限速改用全局 ticker gate, 整体速率 = 1 req / Delay 秒(而非旧的 Threads/Delay)。
+// 3 任务 / Delay=1s → 首个令牌在 ~1s 后发出, 共需 ~3s(>= 2s 断言成立)。
 func TestRunDelayThrottles(t *testing.T) {
 	withMockPlugin(t, "mysql", func(s *plugins.Service) (int, error) {
 		return plugins.CrackFail, nil
 	})
-	const delay = 50 // ms via time.Duration(Delay)*time.Second? runner 用秒, 所以最小 1s 太慢
-	// runner 的 delay 单位是秒, 用 1 任务 + delay=1 会让测试 >=1s, 可接受
-	_ = delay
 
 	r, _ := NewRunner(&Options{Threads: 1, Timeout: 1, Delay: 1, CrackAll: false})
 	addrs := []*IpAddr{{Ip: "127.0.0.1", Port: 3306, Protocol: "mysql"}}
@@ -201,9 +200,31 @@ func TestRunDelayThrottles(t *testing.T) {
 	start := time.Now()
 	r.Run(addrs, userDict, passDict)
 	elapsed := time.Since(start)
-	// 3 任务, 每个后 sleep 1s → 至少 ~2s (最后一个 sleep 后立即返回)
+	// 全局 gate: 3 任务, 每个等 ~1s 令牌 → 至少 ~2s
 	if elapsed < 2*time.Second {
-		t.Errorf("with Delay=1s and 3 tasks, elapsed = %v, want >= 2s", elapsed)
+		t.Errorf("with Delay=1s gate and 3 tasks, elapsed = %v, want >= 2s", elapsed)
+	}
+}
+
+// TestRunDelayGlobalThrottle 验证 P1 的关键语义变化:
+// 即便 Threads>1, 全局 gate 仍把整体速率限制为 1 req / Delay 秒,
+// 而非旧的 Threads/Delay。用多 worker + 多任务断言总耗时 ≈ tasks*Delay。
+func TestRunDelayGlobalThrottle(t *testing.T) {
+	withMockPlugin(t, "mysql", func(s *plugins.Service) (int, error) {
+		return plugins.CrackFail, nil
+	})
+	// 4 workers, 6 tasks, Delay=1s → 全局 gate 下总耗时 ~6s(而非旧的 ~1.5s=6/4)
+	r, _ := NewRunner(&Options{Threads: 4, Timeout: 1, Delay: 1, CrackAll: false})
+	addrs := []*IpAddr{{Ip: "127.0.0.1", Port: 3306, Protocol: "mysql"}}
+	userDict := []string{"root", "admin"}
+	passDict := []string{"p1", "p2", "p3"} // 6 个任务
+
+	start := time.Now()
+	r.Run(addrs, userDict, passDict)
+	elapsed := time.Since(start)
+	// 6 任务 * 1s/req = ~6s; 旧语义(每 worker sleep)会 ~1.5s。断言 >= 4s 足以区分新旧语义。
+	if elapsed < 4*time.Second {
+		t.Errorf("global gate: 6 tasks with Delay=1s elapsed = %v, want >= 4s (old per-worker semantics would be ~1.5s)", elapsed)
 	}
 }
 
@@ -253,5 +274,34 @@ func TestRunMultipleAddrs(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&hits); got != 3 {
 		t.Errorf("total hits = %d, want 3", got)
+	}
+}
+
+// BenchmarkCrackLargeDict 观察 P3(去重改 map) 后大字典场景的引擎吞吐。
+// mock ScanFunc 极快, 压力集中在任务生成/去重/调度开销上。
+func BenchmarkCrackLargeDict(b *testing.B) {
+	// 注入极快的 mock(不走网络), 测试后恢复
+	orig := plugins.ScanFuncMap["mysql"]
+	plugins.ScanFuncMap["mysql"] = func(s *plugins.Service) (int, error) {
+		return plugins.CrackFail, nil
+	}
+	defer func() { plugins.ScanFuncMap["mysql"] = orig }()
+
+	r, _ := NewRunner(&Options{Threads: 8, Timeout: 1, CrackAll: true})
+	addrs := []*IpAddr{{Ip: "127.0.0.1", Port: 3306, Protocol: "mysql"}}
+
+	// 构造大字典: 50 用户 × 100 口令 = 5000 任务
+	users := make([]string, 50)
+	for i := range users {
+		users[i] = "user" + strconv.Itoa(i)
+	}
+	passes := make([]string, 100)
+	for i := range passes {
+		passes[i] = "pass" + strconv.Itoa(i)
+	}
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		r.Run(addrs, users, passes)
 	}
 }

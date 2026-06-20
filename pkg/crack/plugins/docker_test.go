@@ -83,13 +83,34 @@ func startContainer(t *testing.T, spec containerSpec, ready func(host string, po
 	}
 
 	t.Logf("starting container %s (%s) port %d->%d", uniqName, spec.image, spec.hostPort, spec.guestPort)
-	out, err := exec.Command("docker", args...).Output()
-	if err != nil {
-		// 端口可能被占, 打印日志便于诊断
-		logs := containerLogs(uniqName)
-		t.Fatalf("docker run failed: %v\nlogs:\n%s", err, logs)
+	// docker run 可能因 "port is already allocated" 失败(前序测试的容器清理延迟 / TIME_WAIT)。
+	// 这种瞬时冲突重试即可解决, 避免测试 flaky。
+	var (
+		out        []byte
+		err        error
+		containerID string
+	)
+	for attempt := 0; attempt < 5; attempt++ {
+		out, err = exec.Command("docker", args...).CombinedOutput()
+		if err == nil {
+			containerID = strings.TrimSpace(string(out))
+			break
+		}
+		msg := string(out)
+		// 仅对端口/容器冲突重试; 其他错误(镜像不存在等)直接失败
+		if !strings.Contains(msg, "already allocated") &&
+			!strings.Contains(msg, "already in use") &&
+			!strings.Contains(msg, "Conflict") {
+			t.Fatalf("docker run failed: %v\noutput:\n%s", err, msg)
+		}
+		t.Logf("attempt %d: port conflict, retrying in 2s: %s", attempt+1, strings.SplitN(msg, "\n", 2)[0])
+		// 冲突可能是同名残留容器, 试着清掉
+		_ = exec.Command("docker", "rm", "-f", uniqName).Run()
+		time.Sleep(2 * time.Second)
 	}
-	containerID := strings.TrimSpace(string(out))
+	if err != nil {
+		t.Fatalf("docker run failed after retries: %v\noutput:\n%s", err, string(out))
+	}
 
 	t.Cleanup(func() {
 		_ = exec.Command("docker", "rm", "-f", containerID).Run()
