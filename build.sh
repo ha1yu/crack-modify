@@ -15,15 +15,6 @@
 
 set -e
 
-# 自愈: IDE/gopls 可能把 go.mod 的 go 指令抬到 1.24.0(三段式),
-# 而 go1.20.14 只认两段式(报 "must match format 1.23")。
-# 构建前强制写回 go 1.20, 保证脚本可重复运行。
-# (x 系列依赖的实际版本由 go.mod 的 replace 锁定, 与此处指令无关)
-if grep -q '^go 1\.24\.' go.mod 2>/dev/null; then
-    sed -i 's/^go 1\.24\.[0-9]*/go 1.20/' go.mod
-    echo "(已将 go.mod 的 go 指令修正为 1.20 以兼容 go1.20.14 工具链)"
-fi
-
 # 清理并创建 bin 目录
 rm -rf bin/*
 mkdir -p bin
