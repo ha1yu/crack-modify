@@ -28,5 +28,15 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+
+# Build output
+/crack-modify
+
+# Reference source (zpscan upstream, not part of this project)
+/zpscan-1.8.39/
+
+# Runtime output
+result.txt
+*.json
