@@ -5,6 +5,31 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增（测试）
+
+- 建立零外部依赖的测试体系，`go test ./...` 在无 mysql/redis/ssh 等真实服务的环境下稳定通过。
+- **L1 纯函数单元测试** `internal/utils/utils_test.go`：`RemoveDuplicate`（含空串过滤边界）、`Md5`（已知向量）、`HasStr` / `SuffixStr` / `HasInt`。
+- **L1 引擎单元测试** `pkg/crack/crack_test.go`：`ParseTargets` 表驱动覆盖（`ip:port` / `ip:port|proto` / 各类非法输入跳过 / TrimSpace）、`FilterModule`、`NewRunner` 默认字典注入与显式字典保留、`PortNames` ↔ `SupportProtocols` 一致性、内置字典健全性。
+- **L2 并发引擎测试** `pkg/crack/runner_engine_test.go`：通过临时改写 `plugins.ScanFuncMap` 注入 mock ScanFunc，确定性验证 `CheckAlive`、命中即停（`CrackAll:false`）、`CrackAll:true` 继续、`CrackError` 停止目标、`Delay` 限速、`{user}` 模板 + MD5 任务去重、多目标独立计数。
+- **L3 插件契约测试** `pkg/crack/plugins/plugins_test.go`：13 协议注册完整性、返回码常量值、`Service` 结构、各插件对不可达目标调用不 panic 且返回合法码。
+- **L4 mock-TCP 插件测试** `pkg/crack/plugins/plugins_mock_test.go`：用 Go 原生 `net.Listen` 搭 mock 服务，验证 memcached / mongodb 未授权探测的真实命中、未命中回退与连接错误路径。
+- **L5 CLI 集成测试** `cmd/crack_integration_test.go`：编译真实二进制 `exec` 运行，端到端验证根/crack `-h`、无输入报错、`--user-file` / `-f` 不存在报错、死端口不崩溃、混合格式目标解析、`-m` 过滤、`--result` JSON 导出。
+- 支持 `-short` 跳过 CLI 集成测试与网络冒烟，便于 CI。
+
+### 变更（测试相关）
+
+- 测试设计原则：全部用 mock ScanFunc 与本地 TCP mock，不纳入需要真实服务的 success/fail 用例（避免 flaky）。
+- 通过 `-race` 验证爆破引擎工作池无数据竞争。
+
+### 验证结果
+
+- `go vet ./...` 通过（仅余上游原样复制 `smb/session.go` 的 2 处既有 vet 警告，非本次引入）。
+- `go test ./... -count=1`：68 个子用例全部 PASS。
+- `go test -race`：无数据竞争。
+- 覆盖率：`pkg/crack` 97.3% / `plugins` 51.1% / `internal/utils` 40% / `cmd` 10.6%。
+
 ## [v0.1.0] - 2026-06-20
 
 首个可用版本。从 [zpscan](https://github.com/niudaii/zpscan) `v1.8.39` 剥离 `crack`

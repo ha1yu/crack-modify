@@ -71,11 +71,49 @@ go build -o crack-modify .
 crack-modify/
 ├── go.mod, go.sum, main.go
 ├── cmd/                       # cobra CLI（root.go + crack.go）
+│   └── crack_integration_test.go               # 端到端 CLI 集成测试
 ├── internal/utils/            # Md5 / RemoveDuplicate / ReadLines / FileExists / SaveMarshal
+│   └── utils_test.go                            # 纯函数单元测试
 └── pkg/crack/
     ├── config.go parse.go check.go runner.go   # 端口/协议映射、目标解析、存活检测、爆破引擎
+    ├── crack_test.go runner_engine_test.go      # 解析/引擎/并发单元测试
     └── plugins/                                 # 13 个协议插件 + 内嵌 grdp / smb / wmiexec 协议客户端
+        ├── plugins_test.go                      # 插件注册表与契约测试
+        └── plugins_mock_test.go                 # 基于 mock TCP 的插件行为测试
 ```
+
+## 测试
+
+测试遵循**零外部依赖**原则：不依赖真实 mysql/redis/ssh 等服务，全部用 mock ScanFunc 与本地 `net.Listen` mock 服务，`go test ./...` 在干净环境一次通过。
+
+```bash
+# 运行全部测试（68 个子用例）
+go test ./... -count=1
+
+# 带竞态检测（验证爆破引擎工作池无数据竞争）
+go test ./pkg/crack/ ./pkg/crack/plugins/ -race -count=1
+
+# 覆盖率
+go test ./... -count=1 -cover
+
+# 快速模式（跳过 CLI 集成测试与网络冒烟，适合 CI）
+go test ./... -count=1 -short
+```
+
+测试分层：
+
+| 层级 | 文件 | 覆盖内容 |
+|---|---|---|
+| L1 纯函数单元 | `internal/utils/utils_test.go` | `RemoveDuplicate` / `Md5` / `HasStr` 等 |
+| L1 引擎单元 | `pkg/crack/crack_test.go` | `ParseTargets` / `FilterModule` / `NewRunner` 默认注入 / 协议注册表一致性 |
+| L2 并发引擎 | `pkg/crack/runner_engine_test.go` | `CheckAlive` / 命中即停 / `CrackAll` / `CrackError` 停止 / `Delay` 限速 / 任务去重 |
+| L3 插件契约 | `pkg/crack/plugins/plugins_test.go` | 13 协议注册完整性 / 返回码常量 / 可调用不 panic |
+| L4 mock TCP | `pkg/crack/plugins/plugins_mock_test.go` | memcached / mongodb 未授权探测的真实行为 |
+| L5 CLI 集成 | `cmd/crack_integration_test.go` | 编译真实二进制，端到端验证 `-h`、参数校验、目标解析、`--result` 导出 |
+
+当前覆盖率：`pkg/crack` 97.3%、`plugins` 51.1%、`internal/utils` 40%、`cmd` 10.6%（CLI 分支较多，以集成测试保证行为）。
+
+> 注：需要真实数据库/SSH 服务的 success/fail 用例（如上游 `plugins_test.go`）未纳入，因其无法在无外部服务的 CI 环境稳定运行。
 
 ## 说明
 
