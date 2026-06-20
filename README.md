@@ -98,6 +98,10 @@ go test ./... -count=1 -cover
 
 # 快速模式（跳过 CLI 集成测试与网络冒烟，适合 CI）
 go test ./... -count=1 -short
+
+# Docker 真实服务集成测试（可选，需 Docker 且显式开启）
+# 覆盖 10 个协议真实 success/fail/error：mysql/postgres/redis/memcached/ftp/ssh/mssql/mongodb/oracle/smb
+CRACK_DOCKER_TEST=1 go test ./pkg/crack/plugins/ -run TestDocker -count=1 -v -timeout 15m
 ```
 
 测试分层：
@@ -110,10 +114,11 @@ go test ./... -count=1 -short
 | L3 插件契约 | `pkg/crack/plugins/plugins_test.go` | 13 协议注册完整性 / 返回码常量 / 可调用不 panic |
 | L4 mock TCP | `pkg/crack/plugins/plugins_mock_test.go` | memcached / mongodb 未授权探测的真实行为 |
 | L5 CLI 集成 | `cmd/crack_integration_test.go` | 编译真实二进制，端到端验证 `-h`、参数校验、目标解析、`--result` 导出 |
+| L6 Docker 真实服务 | `pkg/crack/plugins/docker_test.go` | 10 协议对真实容器的 success/fail/error（**默认 skip，需 `CRACK_DOCKER_TEST=1`**） |
 
-当前覆盖率：`pkg/crack` 97.3%、`plugins` 51.1%、`internal/utils` 40%、`cmd` 10.6%（CLI 分支较多，以集成测试保证行为）。
+当前覆盖率（不含 Docker 可选测试）：`pkg/crack` 97.3%、`plugins` 51.1%、`internal/utils` 40%、`cmd` 10.6%（CLI 分支较多，以集成测试保证行为）。
 
-> 注：需要真实数据库/SSH 服务的 success/fail 用例（如上游 `plugins_test.go`）未纳入，因其无法在无外部服务的 CI 环境稳定运行。
+> **Docker 集成测试**通过环境变量 `CRACK_DOCKER_TEST=1` 显式开启，默认跳过——确保无 Docker 的 CI 环境 `go test ./...` 仍 100% 绿。覆盖 mysql/postgres/mssql/redis/memcached/ftp/ssh/mongodb/oracle/smb 共 10 个协议的真实 success/fail/error 三态；`wmi`/`wmihash`/`rdp` 因需 Windows 目标未纳入。
 
 ## 说明
 

@@ -9,6 +9,9 @@
 
 ### 新增（测试）
 
+- **L6 Docker 真实服务集成测试** `pkg/crack/plugins/docker_test.go`：通过环境变量 `CRACK_DOCKER_TEST=1` 显式开启（默认与 `-short` 模式均跳过），对 10 个协议的真实容器验证 success/fail/error 三态：`mysql`、`postgres`、`mssql`、`redis`、`memcached`、`ftp`、`ssh`、`mongodb`(3.6 兼容 mgo)、`oracle`(XE)、`smb`。`wmi`/`wmihash`/`rdp` 因需 Windows 目标未纳入。
+  - 通用 `startContainer` 辅助：随机命名、`-p 127.0.0.1:host:guest` 端口映射、`t.Cleanup` 自动 `docker rm -f`、就绪探测（TCP / 协议握手）+ 90s 超时。
+  - `TestDockerErrorPath` 固化各协议对"连接被拒"的实际返回码（mysql/memcached/ftp→`CrackError`，postgres/mssql/redis→`CrackFail`，因上游仅对含 "timeout" 的错误判 `CrackError`），作为行为回归基线。
 - 建立零外部依赖的测试体系，`go test ./...` 在无 mysql/redis/ssh 等真实服务的环境下稳定通过。
 - **L1 纯函数单元测试** `internal/utils/utils_test.go`：`RemoveDuplicate`（含空串过滤边界）、`Md5`（已知向量）、`HasStr` / `SuffixStr` / `HasInt`。
 - **L1 引擎单元测试** `pkg/crack/crack_test.go`：`ParseTargets` 表驱动覆盖（`ip:port` / `ip:port|proto` / 各类非法输入跳过 / TrimSpace）、`FilterModule`、`NewRunner` 默认字典注入与显式字典保留、`PortNames` ↔ `SupportProtocols` 一致性、内置字典健全性。
@@ -26,9 +29,10 @@
 ### 验证结果
 
 - `go vet ./...` 通过（仅余上游原样复制 `smb/session.go` 的 2 处既有 vet 警告，非本次引入）。
-- `go test ./... -count=1`：68 个子用例全部 PASS。
+- `go test ./... -count=1`（不含 Docker 可选测试）：68 个子用例全部 PASS，4 包全 `ok`。
 - `go test -race`：无数据竞争。
 - 覆盖率：`pkg/crack` 97.3% / `plugins` 51.1% / `internal/utils` 40% / `cmd` 10.6%。
+- Docker 集成（`CRACK_DOCKER_TEST=1`）：10 个协议真实容器 success/fail/error 全部 PASS，默认与 `-short` 模式下 11 个 Docker 用例均 skip，不影响 CI。
 
 ## [v0.1.0] - 2026-06-20
 
