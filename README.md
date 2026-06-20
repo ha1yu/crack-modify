@@ -41,6 +41,7 @@ crack-modify crack -h
 Flags:
       --crack-all          crack all user:pass
       --delay int          delay between requests in seconds (0 to disable)
+      --spray              password spraying mode: one password against all users before next (reduces lockout risk)
   -m, --module string      choose one module to crack(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb) (default "all")
       --pass string        pass(example: --pass 'admin,root')
       --pass-file string   pass file(example: --pass-file 'pass.txt')
@@ -70,21 +71,32 @@ go build -o crack-modify .
 # 指定协议（非默认端口）
 ./crack-modify crack -i '127.0.0.1:3307|mysql' -m mysql
 
-# 目标文件，混合两种格式
+# CIDR / IP 段多目标（自动展开）
+./crack-modify crack -i '192.168.1.0/24:445' -m smb --threads 20
+./crack-modify crack -i '10.0.0.1-128:3306' -m mysql --threads 10
+./crack-modify crack -i '10.0.0.1,10.0.0.5:22' -m ssh
+
+# 目标文件，混合多种格式
 ./crack-modify crack -f targets.txt -m all --threads 10
+
+# 密码喷洒（防账户锁定，配合 --delay）
+./crack-modify crack -f ad_targets.txt -m smb --user-file users.txt --pass 'Spring2024,P@ssw0rd' --spray --delay 2 --threads 1
 
 # 自定义字典，命中后继续爆破该目标的所有口令，结果写入 JSON
 ./crack-modify crack -f targets.txt --user-file user.txt --pass-file pass.txt --crack-all --result found.json
 ```
 
-`targets.txt` 每行一个目标，支持：
+`targets.txt` 每行一个目标，支持单 IP / CIDR / IP 段 / 逗号列表：
 
 ```
 127.0.0.1:3306
 127.0.0.1:3307|mysql
-127.0.0.1:6379
-192.168.1.10:22
+192.168.1.0/24:445          # CIDR（最多 /24，防误爆）
+10.0.0.1-128:3306           # IP 段
+10.0.0.1,10.0.0.2:22        # 逗号列表
 ```
+
+> **密码喷洒 vs 字典爆破**：默认是字典爆破（对每个用户跑完全部口令）。Windows 域环境（SMB/MSSQL）下这种模式会触发账户锁定。`--spray` 改为喷洒模式——每个口令先遍历所有用户再换下一个，配合 `--delay` 可显著降低单用户的锁定风险。
 
 ## 目录结构
 

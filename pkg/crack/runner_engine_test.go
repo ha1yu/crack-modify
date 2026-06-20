@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -304,4 +305,61 @@ func BenchmarkCrackLargeDict(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		r.Run(addrs, users, passes)
 	}
+}
+
+// TestSprayTaskOrder 验证喷洒模式任务顺序:
+// 默认(字典爆破)是 for user { for pass } —— 同一用户连试多个口令;
+// 喷洒模式是 for pass { for user } —— 同一口令遍历所有用户再换下一个。
+// 用 Threads:1 + 记录 mock 调用顺序来断言。
+func TestSprayTaskOrder(t *testing.T) {
+	users := []string{"u1", "u2", "u3"}
+	passes := []string{"p1", "p2"}
+
+	// 默认模式期望顺序: u1p1,u1p2,u2p1,u2p2,u3p1,u3p2
+	wantDefault := []string{"u1:p1", "u1:p2", "u2:p1", "u2:p2", "u3:p1", "u3:p2"}
+	// 喷洒模式期望顺序: u1p1,u2p1,u3p1,u1p2,u2p2,u3p2
+	wantSpray := []string{"u1:p1", "u2:p1", "u3:p1", "u1:p2", "u2:p2", "u3:p2"}
+
+	runOrder := func(spray bool) []string {
+		var order []string
+		var mu sync.Mutex
+		orig := plugins.ScanFuncMap["mysql"]
+		plugins.ScanFuncMap["mysql"] = func(s *plugins.Service) (int, error) {
+			mu.Lock()
+			order = append(order, s.User+":"+s.Pass)
+			mu.Unlock()
+			return plugins.CrackFail, nil
+		}
+		defer func() { plugins.ScanFuncMap["mysql"] = orig }()
+		r, _ := NewRunner(&Options{Threads: 1, Timeout: 1, CrackAll: true, Spray: spray})
+		addrs := []*IpAddr{{Ip: "127.0.0.1", Port: 3306, Protocol: "mysql"}}
+		r.Run(addrs, users, passes)
+		return order
+	}
+
+	t.Run("default_order", func(t *testing.T) {
+		got := runOrder(false)
+		if !equalStrSlice(got, wantDefault) {
+			t.Errorf("default order = %v, want %v", got, wantDefault)
+		}
+	})
+	t.Run("spray_order", func(t *testing.T) {
+		got := runOrder(true)
+		if !equalStrSlice(got, wantSpray) {
+			t.Errorf("spray order = %v, want %v", got, wantSpray)
+		}
+	})
+}
+
+// equalStrSlice 顺序敏感比较。
+func equalStrSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

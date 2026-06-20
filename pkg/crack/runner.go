@@ -18,6 +18,7 @@ type Options struct {
 	Timeout  int
 	Delay    int
 	CrackAll bool
+	Spray    bool // 喷洒模式: 对所有用户各试一个口令再换下一个(防账户锁定), 与默认的字典爆破(每用户跑全口令)顺序相反
 
 	UserMap      map[string][]string
 	CommonPass   []string
@@ -93,24 +94,37 @@ func (r *Runner) Crack(addr *IpAddr, userDict []string, passDict []string) (resu
 		passDict = append(passDict, r.options.TemplatePass...)
 		passDict = append(passDict, r.options.CommonPass...)
 	}
-	for _, user := range userDict {
+	// 生成任务:
+	//   字典爆破(默认): 对每个用户跑全部口令  for user { for pass }
+	//   喷洒模式(Spray): 对所有用户各试一个口令再换下一个  for pass { for user }
+	//     喷洒模式配合 --delay 可降低单用户被锁定风险(同一用户两次尝试间隔 = 用户数*delay)
+	addTask := func(user, pass string) {
+		pass = strings.ReplaceAll(pass, "{user}", user)
+		dedupKey := user + "\x00" + pass
+		if _, ok := taskSet[dedupKey]; ok {
+			return
+		}
+		taskSet[dedupKey] = struct{}{}
+		tasks = append(tasks, plugins.Service{
+			Ip:       addr.Ip,
+			Port:     addr.Port,
+			Protocol: addr.Protocol,
+			User:     user,
+			Pass:     pass,
+			Timeout:  r.options.Timeout,
+		})
+	}
+	if r.options.Spray {
 		for _, pass := range passDict {
-			// 替换{user}
-			pass = strings.ReplaceAll(pass, "{user}", user)
-			// 任务去重
-			dedupKey := user + "\x00" + pass
-			if _, ok := taskSet[dedupKey]; ok {
-				continue
+			for _, user := range userDict {
+				addTask(user, pass)
 			}
-			taskSet[dedupKey] = struct{}{}
-			tasks = append(tasks, plugins.Service{
-				Ip:       addr.Ip,
-				Port:     addr.Port,
-				Protocol: addr.Protocol,
-				User:     user,
-				Pass:     pass,
-				Timeout:  r.options.Timeout,
-			})
+		}
+	} else {
+		for _, user := range userDict {
+			for _, pass := range passDict {
+				addTask(user, pass)
+			}
 		}
 	}
 	// RunTask

@@ -23,6 +23,7 @@ type CrackOptions struct {
 	Timeout  int
 	Delay    int
 	CrackAll bool
+	Spray    bool
 }
 
 var (
@@ -42,6 +43,7 @@ func init() {
 	crackCmd.Flags().IntVar(&crackOptions.Timeout, "timeout", 10, "timeout in seconds")
 	crackCmd.Flags().IntVar(&crackOptions.Delay, "delay", 0, "delay between requests in seconds (0 to disable)")
 	crackCmd.Flags().BoolVar(&crackOptions.CrackAll, "crack-all", false, "crack all user:pass")
+	crackCmd.Flags().BoolVar(&crackOptions.Spray, "spray", false, "password spraying mode: try one password against all users before moving to next (reduces account lockout risk, pair with --delay)")
 
 	rootCmd.AddCommand(crackCmd)
 }
@@ -111,6 +113,7 @@ func (o *CrackOptions) run() {
 		Timeout:  o.Timeout,
 		Delay:    o.Delay,
 		CrackAll: o.CrackAll,
+		Spray:    o.Spray,
 		// 留空则 NewRunner 自动注入内置的 UserMap/CommonPass/TemplatePass
 	}
 	crackRunner, err := crack.NewRunner(options)

@@ -94,6 +94,48 @@ func TestParseTargets(t *testing.T) {
 				{Ip: "5.5.5.5", Port: 6379, Protocol: "redis"},
 			},
 		},
+		{
+			name:    "cidr_expand",
+			targets: []string{"192.168.1.0/30:3306"},
+			want: []*IpAddr{
+				{Ip: "192.168.1.0", Port: 3306, Protocol: "mysql"},
+				{Ip: "192.168.1.1", Port: 3306, Protocol: "mysql"},
+				{Ip: "192.168.1.2", Port: 3306, Protocol: "mysql"},
+				{Ip: "192.168.1.3", Port: 3306, Protocol: "mysql"},
+			},
+		},
+		{
+			name:    "range_expand",
+			targets: []string{"10.0.0.10-12:6379"},
+			want: []*IpAddr{
+				{Ip: "10.0.0.10", Port: 6379, Protocol: "redis"},
+				{Ip: "10.0.0.11", Port: 6379, Protocol: "redis"},
+				{Ip: "10.0.0.12", Port: 6379, Protocol: "redis"},
+			},
+		},
+		{
+			name:    "cidr_with_explicit_protocol",
+			targets: []string{"172.16.0.0/31:445|smb"},
+			want: []*IpAddr{
+				{Ip: "172.16.0.0", Port: 445, Protocol: "smb"},
+				{Ip: "172.16.0.1", Port: 445, Protocol: "smb"},
+			},
+		},
+		{
+			name: "comma_list_expand",
+			targets: []string{"10.0.0.1,10.0.0.2:22"},
+			want: []*IpAddr{
+				{Ip: "10.0.0.1", Port: 22, Protocol: "ssh"},
+				{Ip: "10.0.0.2", Port: 22, Protocol: "ssh"},
+			},
+		},
+		{
+			name:    "cidr_too_large_skipped",
+			targets: []string{"10.0.0.0/8:3306", "192.168.1.1:3306"},
+			want: []*IpAddr{
+				{Ip: "192.168.1.1", Port: 3306, Protocol: "mysql"},
+			},
+		},
 	}
 
 	for _, tc := range tests {

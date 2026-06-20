@@ -3,6 +3,8 @@ package crack
 import (
 	"strconv"
 	"strings"
+
+	"crack-modify/internal/utils"
 )
 
 func ParseTargets(targets []string) (results []*IpAddr) {
@@ -12,27 +14,35 @@ func ParseTargets(targets []string) (results []*IpAddr) {
 		if len(tmp) != 2 {
 			continue
 		}
-		ip := tmp[0]
+		// 展开目标 IP: 支持单 IP / CIDR(192.168.1.0/24) / IP段(192.168.1.1-128) / 逗号列表
+		ips, err := utils.ExpandIPs(tmp[0])
+		if err != nil {
+			continue
+		}
 		tmp = strings.Split(tmp[1], "|")
 		if len(tmp) == 2 { // ip列表中指定了端口对应的服务
 			port, _ := strconv.Atoi(tmp[0])
 			protocol := tmp[1]
 			if SupportProtocols[protocol] {
-				results = append(results, &IpAddr{
-					Ip:       ip,
-					Port:     port,
-					Protocol: protocol,
-				})
+				for _, ip := range ips {
+					results = append(results, &IpAddr{
+						Ip:       ip,
+						Port:     port,
+						Protocol: protocol,
+					})
+				}
 			}
 		} else { // 通过端口查默认服务
 			port, _ := strconv.Atoi(tmp[0])
 			protocol, ok := PortNames[port]
 			if ok && SupportProtocols[protocol] {
-				results = append(results, &IpAddr{
-					Ip:       ip,
-					Port:     port,
-					Protocol: protocol,
-				})
+				for _, ip := range ips {
+					results = append(results, &IpAddr{
+						Ip:       ip,
+						Port:     port,
+						Protocol: protocol,
+					})
+				}
 			}
 		}
 	}

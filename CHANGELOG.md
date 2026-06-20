@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 新增（功能）
+
+- **多目标输入（CIDR / IP 段 / 逗号列表）**：目标 IP 现支持 `192.168.1.0/24`（CIDR，限制 ≤ /24 防误爆）、`192.168.1.1-128`（IP 段）、`10.0.0.1,10.0.0.2`（逗号列表），与端口/协议格式组合如 `192.168.1.0/24:445|smb`。新增 `internal/utils/ip.go` 的 `ExpandIPs`。
+- **密码喷洒模式（`--spray`）**：默认字典爆破为"每用户跑全口令"，Windows 域（SMB/MSSQL）下易触发账户锁定。`--spray` 改为"每口令遍历所有用户再换下一个"，配合 `--delay` 降低单用户锁定风险。`Options.Spray` 控制任务生成顺序。
+
+### 新增（测试）
+
+- `internal/utils/ip_test.go`：CIDR/段/逗号列表展开的完整单元测试（含 /24、/30、超大 CIDR 拒绝、非法段等）。
+- `pkg/crack/crack_test.go`：`ParseTargets` 新增 CIDR/段/逗号/超大CIDR 跳过等用例。
+- `pkg/crack/runner_engine_test.go`：`TestSprayTaskOrder` 验证喷洒模式与默认模式的任务顺序差异。
+
 ## [v1.0.0] - 2026-06-20
 
 首个正式发布版本。相对 [v0.1.0](#v010---2026-06-20)，包含工具链降级（支持 Win7）、引擎 4 项修复、完整测试体系（含 Docker 真实服务集成测试）。
