@@ -1,6 +1,6 @@
 module crack-modify
 
-go 1.24.0
+go 1.20
 
 require (
 	github.com/C-Sto/goWMIExec v0.0.1-deva
@@ -54,11 +54,14 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/djherbis/times.v1 v1.3.0 // indirect
 )
 
 replace (
 	github.com/projectdiscovery/gologger v1.1.5 => github.com/niudaii/gologger v0.0.0-20221228035758-e9e3db534f19
 	github.com/tomatome/grdp v0.0.0-20211231062539-be8adab7eaf3 => github.com/shadow1ng/grdp v1.0.3
+	golang.org/x/sys => golang.org/x/sys v0.6.0
+	// 锁定 x 系列到兼容 go1.20 的版本, 避免被 MVS 抬升到要求 go1.24 的新版
+	golang.org/x/text => golang.org/x/text v0.14.0
 )

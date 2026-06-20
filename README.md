@@ -4,6 +4,27 @@
 
 > 当前版本：**v0.1.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 
+## 构建
+
+```bash
+./build.sh
+```
+
+多平台交叉编译 9 个目标到 `./bin/`：
+
+| 平台 | 架构 |
+|---|---|
+| darwin | arm64, amd64 |
+| linux | arm, 386, arm64, amd64 |
+| windows | 386, arm64, amd64 |
+
+- **工具链锁定 `go1.20.14`**（`GOTOOLCHAIN` 会自动下载），**支持 Windows 7**（Go 1.21+ 已放弃 Win7）。
+- `CGO_ENABLED=0` 纯静态，`-trimpath -ldflags "-s -w"` 去路径/调试符号瘦身。
+- 产物内嵌 `go1.20.14`、Linux 为纯静态 ELF。
+- 脚本内置自愈：若 IDE 把 `go.mod` 的 go 指令抬到 `1.24.x`，构建前自动修正回 `1.20`。
+
+> 单平台快速编译：`GOTOOLCHAIN=go1.20.14 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o crack-modify .`
+
 ## 功能
 
 - 支持默认端口协议和自定义协议爆破：`127.0.0.1:3306`（按端口识别 mysql）、`127.0.0.1:3307|mysql`（显式指定协议）

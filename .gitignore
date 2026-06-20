@@ -33,6 +33,7 @@ go.work.sum
 
 # Build output
 /crack-modify
+/bin/
 
 # Reference source (zpscan upstream, not part of this project)
 /zpscan-1.8.39/
