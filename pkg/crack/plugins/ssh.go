@@ -29,7 +29,9 @@ func SshCrack(serv *Service) (int, error) {
 	}
 	defer client.Close()
 	session, err := client.NewSession()
-	errRet := session.Run("echo zp857")
+	// 仅校验会话能否真正执行命令(排除认证通过但被 ForceCommand 等限制的情况)。
+	// 用 true(标准 no-op)而非 echo <标记串>, 避免在目标留下可识别的工具指纹。
+	errRet := session.Run("true")
 	if err != nil || errRet != nil {
 		return CrackFail, nil
 	}

@@ -32,7 +32,7 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:               "crack-modify",
-	Short:             "一个有点好用的弱口令爆破工具 by zp857",
+		Short:             "一个有点好用的弱口令爆破工具",
 	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		commonOptions.configureOutput()

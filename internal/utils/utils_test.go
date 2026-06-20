@@ -80,7 +80,7 @@ func TestMd5(t *testing.T) {
 	}{
 		{"", "d41d8cd98f00b204e9800998ecf8427e"},
 		{"abc", "900150983cd24fb0d6963f7d28e17f72"},
-		{"zp857", ""}, // 仅校验长度+格式, 见下
+		{"some-random-input", ""}, // 仅校验长度+格式, 见下
 	}
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
