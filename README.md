@@ -2,7 +2,7 @@
 
 常见服务弱口令爆破工具，从 [zpscan](https://github.com/niudaii/zpscan) 的 `crack` 模块剥离而来，作为独立可编译的命令行工具，去掉了对其余模块（webscan / ipscan / dirscan / domainscan / pocscan）以及 `config.yaml` 的依赖。
 
-> 当前版本：**v0.1.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
+> 当前版本：**v1.0.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 
 ## 构建
 

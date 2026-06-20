@@ -7,12 +7,16 @@
 
 ## [Unreleased]
 
+## [v1.0.0] - 2026-06-20
+
+首个正式发布版本。相对 [v0.1.0](#v010---2026-06-20)，包含工具链降级（支持 Win7）、引擎 4 项修复、完整测试体系（含 Docker 真实服务集成测试）。
+
 ### 变更（工具链降级，支持 Windows 7）
 
 - **Go 工具链由 go1.24 降级到 `go1.20.14`**：Go 1.21+ 已放弃 Windows 7 支持，降级到 1.20.x 是产出 Win7 兼容二进制的必要条件。
 - `go.mod` 的 `go` 指令由 `1.24.0` 改为 `1.20`。
 - **`replace` 锁定 `golang.org/x/text` → v0.14.0、`golang.org/x/sys` → v0.6.0**：原 `go mod tidy` 曾把 x/text 升到 v0.33.0（其源码要求 go 1.24，go1.20.14 编译报 "cannot compile Go 1.24 code"）。用 `replace` 强制锁定到兼容 go1.20 的版本，绕过 MVS 自动抬升。wmiexec 的 unicode 编码功能不受影响（Docker 回归验证通过）。
-- **新增 `build.sh` 多平台交叉构建脚本**：9 个目标（darwin/linux/windows × arm64/amd64/386 等），`CGO_ENABLED=0` 纯静态，`-trimpath -ldflags "-s -w"` 瘦身。内置自愈逻辑：构建前若 go.mod 的 go 指令被 IDE 抬到 `1.24.x`，自动修正回 `1.20`（go1.20.14 不认三段式版本号）。
+- **新增 `build.sh` 多平台交叉构建脚本**：9 个目标（darwin/linux/windows × arm64/amd64/386 等），`CGO_ENABLED=0` 纯静态，`-trimpath -ldflags "-s -w"` 瘦身。
 - 产物二进制内嵌 `go1.20.14`、Linux 为纯静态 ELF，Win7 兼容性有保障。
 
 ### 变更（引擎优化与修复）
