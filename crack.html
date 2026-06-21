@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>crack-modify 命令配置</title>
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --panel: #2a2a3c;
+    --panel2: #313244;
+    --border: #45475a;
+    --text: #cdd6f4;
+    --muted: #a6adc8;
+    --accent: #89b4fa;
+    --accent2: #a6e3a1;
+    --code-bg: #11111b;
+    --warn: #f9e2af;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h1 .v { color: var(--accent); font-size: 14px; font-weight: normal; margin-left: 8px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+
+  /* 预设按钮组 */
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .preset {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .15s;
+  }
+  .preset:hover { border-color: var(--accent); color: var(--accent); }
+  .preset:active { transform: translateY(1px); }
+  .preset .tag { color: var(--muted); font-size: 11px; margin-left: 4px; }
+
+  /* 布局 */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.full { grid-column: 1 / -1; }
+  label { color: var(--muted); font-size: 12px; }
+  label .opt { color: var(--accent); font-family: monospace; }
+  input[type=text], input[type=number], select {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  input[type=number] { width: 100%; }
+  .hint { color: var(--muted); font-size: 11px; }
+
+  /* 可折叠帮助卡片 */
+  .help-toggle {
+    display: inline-block;
+    color: var(--accent);
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 6px;
+    user-select: none;
+    border-bottom: 1px dashed var(--accent);
+    padding-bottom: 1px;
+  }
+  .help-toggle:hover { opacity: .8; }
+  .help-card {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.7;
+  }
+  .help-card.open { display: block; }
+  .help-card h4 { margin: 0 0 6px; font-size: 13px; color: var(--text); }
+  .help-card h4:not(:first-child) { margin-top: 12px; }
+  .help-card table { border-collapse: collapse; width: 100%; margin: 4px 0; }
+  .help-card th, .help-card td { padding: 3px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .help-card th { color: var(--muted); font-weight: normal; font-size: 11px; }
+  .help-card code { color: var(--accent2); background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  .help-card .ex { color: var(--accent2); font-family: "Cascadia Code", Consolas, monospace; }
+  .help-card .warn { color: var(--warn); }
+
+  /* radio 互斥组 */
+  .radio-group { display: flex; gap: 16px; align-items: center; margin-bottom: 4px; }
+  .radio-group label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text); font-size: 13px; }
+
+  /* 开关组 */
+  .switches { display: flex; flex-wrap: wrap; gap: 14px; grid-column: 1 / -1; }
+  .switch { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
+  .switch input { width: auto; }
+  .switch .opt { color: var(--accent); font-family: monospace; font-size: 12px; }
+
+  /* 命令预览 */
+  .cmd-section { margin-top: 26px; }
+  .cmd-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cmd-head .title { font-size: 13px; color: var(--muted); }
+  .cmd-actions { display: flex; gap: 8px; }
+  .btn {
+    background: var(--accent);
+    color: #11111b;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .btn:hover { opacity: .9; }
+  .btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  code { font-family: "Cascadia Code", "Fira Code", Consolas, monospace; font-size: 13px; color: var(--accent2); }
+  .copied { color: var(--accent2) !important; }
+  .sep { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>crack-modify 命令配置 <span class="v">v1.3.0</span></h1>
+  <p class="sub">常见服务弱口令爆破 · 勾选参数自动生成命令，复制到终端执行</p>
+
+  <!-- 场景预设 -->
+  <div class="presets" id="presets"></div>
+
+  <div class="grid">
+    <!-- 目标输入 -->
+    <div class="field full">
+      <label>目标</label>
+      <div class="radio-group">
+        <label><input type="radio" name="targetMode" value="i" checked> 单个/多个目标 <span class="opt">-i</span></label>
+        <label><input type="radio" name="targetMode" value="f"> 目标文件 <span class="opt">-f</span></label>
+      </div>
+      <input type="text" id="input" placeholder="127.0.0.1:3306  或  192.168.1.0/24:445  或  10.0.0.1-128:22  (支持 CIDR/IP段/逗号列表)">
+      <input type="text" id="inputFile" placeholder="targets.txt (每行一个目标)" style="display:none">
+      <div class="hint">格式：ip:port / CIDR(≤/24) / IP段(1-128) / 逗号列表。协议由 -m 决定, 端口任意</div>
+      <span class="help-toggle" onclick="toggleHelp()">▾ -i / -f 目标格式说明（点击展开）</span>
+      <div class="help-card" id="helpCard">
+        <h4>基本格式：<code>IP规范:端口</code></h4>
+        <div>IP 部分可以是单个 IP / CIDR / IP段 / 逗号列表；端口必填（任意端口均可）。<b>协议由 <code>-m</code> 指定</b>，与端口无关。</div>
+
+        <h4>IP 部分写法</h4>
+        <table>
+          <tr><th>写法</th><th>含义</th><th>例子</th></tr>
+          <tr><td>单个 IP</td><td>一个目标</td><td class="ex">127.0.0.1</td></tr>
+          <tr><td>CIDR</td><td>网段展开（≤ /24，防误爆）</td><td class="ex">192.168.1.0/24</td></tr>
+          <tr><td>IP 段</td><td>末位数字范围</td><td class="ex">10.0.0.1-128</td></tr>
+          <tr><td>逗号列表</td><td>多个 IP</td><td class="ex">10.0.0.1,10.0.0.5</td></tr>
+        </table>
+
+        <h4>完整例子</h4>
+        <table>
+          <tr><th>-i 的值</th><th>展开为</th></tr>
+          <tr><td class="ex">127.0.0.1:3306</td><td>1 个目标（-m mysql 时当 mysql 爆破）</td></tr>
+          <tr><td class="ex">127.0.0.1:3307</td><td>1 个目标（-m mysql 时, 非标准端口也当 mysql）</td></tr>
+          <tr><td class="ex">192.168.1.0/24:445</td><td>256 个目标（-m smb 时全当 smb）</td></tr>
+          <tr><td class="ex">10.0.0.1-128:22</td><td>128 个目标（-m ssh 时全当 ssh）</td></tr>
+          <tr><td class="ex">10.0.0.1,10.0.0.5:3306</td><td>2 个目标（逗号列表, -m mysql）</td></tr>
+        </table>
+
+        <h4>注意事项</h4>
+        <div class="warn">• 必须带端口：<span class="ex">192.168.1.0/24</span>（无端口）会被跳过，要写 <span class="ex">192.168.1.0/24:445</span>。</div>
+        <div>• <code>-m</code> 决定协议：端口与服务标准端口不同也没关系（如 mysql 跑在 3307，只要 <code>-m mysql</code>）。</div>
+        <div>• <code>-f</code> 目标文件：每行一个目标，格式同上。</div>
+      </div>
+    </div>
+
+    <!-- 模块 -->
+    <div class="field">
+      <label>爆破模块 <span class="opt">-m</span></label>
+      <select id="module">
+        <option value="ssh" selected>ssh</option>
+        <option value="rdp">rdp</option>
+        <option value="mysql">mysql</option>
+        <option value="mssql">mssql</option>
+        <option value="postgres">postgres</option>
+        <option value="oracle">oracle</option>
+        <option value="redis">redis</option>
+        <option value="memcached">memcached</option>
+        <option value="mongodb">mongodb</option>
+        <option value="ftp">ftp</option>
+        <option value="smb">smb</option>
+        <option value="wmi">wmi</option>
+        <option value="wmihash">wmihash (哈希传递)</option>
+      </select>
+    </div>
+
+    <!-- 并发 -->
+    <div class="field">
+      <label>并发线程数 <span class="opt">--threads</span></label>
+      <input type="number" id="threads" value="1" min="1">
+    </div>
+
+    <!-- 用户名 -->
+    <div class="field">
+      <label>用户名</label>
+      <div class="radio-group">
+        <label><input type="radio" name="userMode" value="inline" checked> 内联 <span class="opt">--user</span></label>
+        <label><input type="radio" name="userMode" value="file"> 文件 <span class="opt">--user-file</span></label>
+      </div>
+      <input type="text" id="user" placeholder="root,admin (逗号分隔)">
+      <input type="text" id="userFile" placeholder="user.txt" style="display:none">
+    </div>
+
+    <!-- 口令 -->
+    <div class="field">
+      <label>口令</label>
+      <div class="radio-group">
+        <label><input type="radio" name="passMode" value="inline" checked> 内联 <span class="opt">--pass</span></label>
+        <label><input type="radio" name="passMode" value="file"> 文件 <span class="opt">--pass-file</span></label>
+      </div>
+      <input type="text" id="pass" placeholder="123456,admin (逗号分隔); 留空用内置字典)">
+      <input type="text" id="passFile" placeholder="pass.txt" style="display:none">
+    </div>
+
+    <!-- 超时 -->
+    <div class="field">
+      <label>连接超时(秒) <span class="opt">--timeout</span></label>
+      <input type="number" id="timeout" value="10" min="1">
+    </div>
+
+    <!-- 限速 -->
+    <div class="field">
+      <label>请求间隔(秒) <span class="opt">--delay</span></label>
+      <input type="number" id="delay" value="0" min="0">
+      <div class="hint">0 关闭限速；全局令牌桶，真实按此间隔发请求</div>
+    </div>
+
+    <!-- 输出文件 -->
+    <div class="field">
+      <label>日志输出文件 <span class="opt">-o</span></label>
+      <input type="text" id="output" value="result.txt">
+    </div>
+
+    <!-- 结果导出 -->
+    <div class="field">
+      <label>命中结果导出(JSON) <span class="opt">--result</span></label>
+      <input type="text" id="result" placeholder="found.json (可选)">
+    </div>
+
+    <!-- 二进制路径 -->
+    <div class="field full">
+      <label>二进制路径</label>
+      <input type="text" id="bin" value="./crack_modify_linux_amd64">
+    </div>
+
+    <!-- 开关组 -->
+    <div class="switches">
+      <label class="switch"><input type="checkbox" id="crackAll"> 命中1个账号密码后继续爆破 <span class="opt">--crack-all</span></label>
+      <label class="switch"><input type="checkbox" id="spray"> 密码喷洒 <span class="opt">--spray</span></label>
+      <label class="switch"><input type="checkbox" id="debug"> 调试输出 <span class="opt">--debug</span></label>
+      <label class="switch"><input type="checkbox" id="noColor"> 关闭彩色 <span class="opt">--no-color</span></label>
+    </div>
+  </div>
+
+  <!-- 命令预览 -->
+  <div class="cmd-section">
+    <div class="cmd-head">
+      <span class="title">生成的命令</span>
+      <div class="cmd-actions">
+        <button class="btn ghost" id="resetBtn">重置</button>
+        <button class="btn" id="copyBtn">复制命令</button>
+      </div>
+    </div>
+    <pre><code id="cmd"></code></pre>
+  </div>
+</div>
+
+<script>
+// 折叠帮助卡片
+function toggleHelp() {
+  const card = document.getElementById("helpCard");
+  const toggle = document.querySelector(".help-toggle");
+  card.classList.toggle("open");
+  toggle.textContent = card.classList.contains("open")
+    ? "▴ -i / -f 目标格式说明（点击收起）"
+    : "▾ -i / -f 目标格式说明（点击展开）";
+}
+
+// 场景预设: module + 默认用户
+const PRESETS = [
+  { name: "SSH",        module: "ssh",        user: "root" },
+  { name: "RDP",        module: "rdp",        user: "administrator" },
+  { name: "MySQL",      module: "mysql",      user: "root" },
+  { name: "MSSQL",      module: "mssql",      user: "sa" },
+  { name: "PostgreSQL", module: "postgres",   user: "postgres" },
+  { name: "Oracle",     module: "oracle",     user: "system" },
+  { name: "Redis",      module: "redis",      user: "" },
+  { name: "Memcached",  module: "memcached",  user: "" },
+  { name: "MongoDB",    module: "mongodb",    user: "" },
+  { name: "FTP",        module: "ftp",        user: "admin" },
+  { name: "SMB",        module: "smb",        user: "administrator" },
+  { name: "WMI",        module: "wmi",        user: "administrator" },
+  { name: "WMI Hash",   module: "wmihash",    user: "administrator" },
+];
+
+// 渲染预设按钮
+const presetsEl = document.getElementById("presets");
+PRESETS.forEach(p => {
+  const btn = document.createElement("button");
+  btn.className = "preset";
+  btn.innerHTML = p.name + (p.user ? `<span class="tag">${p.user}</span>` : '<span class="tag">未授权</span>');
+  btn.onclick = () => {
+    document.getElementById("module").value = p.module;
+    document.getElementById("user").value = p.user;
+    // 切到内联用户模式
+    document.querySelector('input[name=userMode][value=inline]').checked = true;
+    toggleUserMode();
+    generate();
+  };
+  presetsEl.appendChild(btn);
+});
+
+// 互斥输入框切换
+function toggleTargetMode() {
+  const mode = document.querySelector('input[name=targetMode]:checked').value;
+  document.getElementById("input").style.display = mode === "i" ? "" : "none";
+  document.getElementById("inputFile").style.display = mode === "f" ? "" : "none";
+}
+function toggleUserMode() {
+  const mode = document.querySelector('input[name=userMode]:checked').value;
+  document.getElementById("user").style.display = mode === "inline" ? "" : "none";
+  document.getElementById("userFile").style.display = mode === "file" ? "" : "none";
+}
+function togglePassMode() {
+  const mode = document.querySelector('input[name=passMode]:checked').value;
+  document.getElementById("pass").style.display = mode === "inline" ? "" : "none";
+  document.getElementById("passFile").style.display = mode === "file" ? "" : "none";
+}
+document.querySelectorAll('input[name=targetMode]').forEach(r => r.onchange = toggleTargetMode);
+document.querySelectorAll('input[name=userMode]').forEach(r => r.onchange = toggleUserMode);
+document.querySelectorAll('input[name=passMode]').forEach(r => r.onchange = togglePassMode);
+
+// 值含特殊字符(空格/引号/$/|/;/,/等)时用单引号包裹; 内部单引号转义
+function quote(v) {
+  if (v === "") return "''";
+  if (/[\s'"`$|;&<>\\()]/.test(v)) {
+    return "'" + v.replace(/'/g, "'\\''") + "'";
+  }
+  return v;
+}
+
+// 生成命令
+function generate() {
+  const parts = [];
+  const bin = document.getElementById("bin").value.trim();
+  parts.push(bin || "./crack_modify_linux_amd64");
+
+  // 目标 -i / -f
+  const tMode = document.querySelector('input[name=targetMode]:checked').value;
+  if (tMode === "i") {
+    const v = document.getElementById("input").value.trim();
+    if (v) parts.push("-i", quote(v));
+  } else {
+    const v = document.getElementById("inputFile").value.trim();
+    if (v) parts.push("-f", quote(v));
+  }
+
+  // 模块(-m 必填, 协议由此决定, 端口任意)
+  const mod = document.getElementById("module").value;
+  parts.push("-m", mod);
+
+  // 用户
+  const uMode = document.querySelector('input[name=userMode]:checked').value;
+  if (uMode === "inline") {
+    const v = document.getElementById("user").value.trim();
+    if (v) parts.push("--user", quote(v));
+  } else {
+    const v = document.getElementById("userFile").value.trim();
+    if (v) parts.push("--user-file", quote(v));
+  }
+
+  // 口令
+  const pMode = document.querySelector('input[name=passMode]:checked').value;
+  if (pMode === "inline") {
+    const v = document.getElementById("pass").value.trim();
+    if (v) parts.push("--pass", quote(v));
+  } else {
+    const v = document.getElementById("passFile").value.trim();
+    if (v) parts.push("--pass-file", quote(v));
+  }
+
+  // 并发(默认1, 非1才加以保持简洁)
+  const threads = document.getElementById("threads").value;
+  if (threads && threads !== "1") parts.push("--threads", threads);
+
+  // 超时(默认10)
+  const timeout = document.getElementById("timeout").value;
+  if (timeout && timeout !== "10") parts.push("--timeout", timeout);
+
+  // 限速(默认0, 非0才加)
+  const delay = document.getElementById("delay").value;
+  if (delay && delay !== "0") parts.push("--delay", delay);
+
+  // 输出文件(默认 result.txt, 非默认才加)
+  const output = document.getElementById("output").value.trim();
+  if (output && output !== "result.txt") parts.push("-o", quote(output));
+
+  // 结果导出(可选)
+  const result = document.getElementById("result").value.trim();
+  if (result) parts.push("--result", quote(result));
+
+  // 开关
+  if (document.getElementById("crackAll").checked) parts.push("--crack-all");
+  if (document.getElementById("spray").checked) parts.push("--spray");
+  if (document.getElementById("debug").checked) parts.push("--debug");
+  if (document.getElementById("noColor").checked) parts.push("--no-color");
+
+  // 渲染: 给 flag 加颜色高亮
+  const html = parts.map((p, i) => {
+    if (i === 0) return '<span style="color:#f9e2af">' + escapeHtml(p) + '</span>';
+    if (p.startsWith("-")) return '<span class="sep">' + escapeHtml(p) + '</span>';
+    return escapeHtml(p);
+  }).join(" ");
+  document.getElementById("cmd").innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// 所有输入变化触发重新生成
+document.querySelectorAll("input, select").forEach(el => {
+  el.addEventListener("input", generate);
+  el.addEventListener("change", generate);
+});
+
+// 复制
+document.getElementById("copyBtn").onclick = async function() {
+  const text = document.getElementById("cmd").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // 降级: 旧浏览器用临时 textarea
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+  const btn = this;
+  const orig = btn.textContent;
+  btn.textContent = "✓ 已复制";
+  btn.classList.add("copied");
+  setTimeout(() => { btn.textContent = orig; btn.classList.remove("copied"); }, 1500);
+};
+
+// 重置
+document.getElementById("resetBtn").onclick = function() {
+  document.getElementById("input").value = "";
+  document.getElementById("inputFile").value = "";
+  document.getElementById("module").value = "ssh";
+  document.getElementById("user").value = "";
+  document.getElementById("userFile").value = "";
+  document.getElementById("pass").value = "";
+  document.getElementById("passFile").value = "";
+  document.getElementById("threads").value = "1";
+  document.getElementById("timeout").value = "10";
+  document.getElementById("delay").value = "0";
+  document.getElementById("output").value = "result.txt";
+  document.getElementById("result").value = "";
+  document.getElementById("bin").value = "./crack_modify_linux_amd64";
+  document.getElementById("crackAll").checked = false;
+  document.getElementById("spray").checked = false;
+  document.getElementById("debug").checked = false;
+  document.getElementById("noColor").checked = false;
+  document.querySelector('input[name=targetMode][value=i]').checked = true;
+  document.querySelector('input[name=userMode][value=inline]').checked = true;
+  document.querySelector('input[name=passMode][value=inline]').checked = true;
+  toggleTargetMode(); toggleUserMode(); togglePassMode();
+  generate();
+};
+
+// 初始化
+generate();
+</script>
+</body>
+</html>

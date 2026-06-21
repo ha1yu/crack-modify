@@ -9,7 +9,9 @@ import (
 	"crack-modify/pkg/crack/plugins"
 )
 
-// TestParseTargets 覆盖两种目标格式以及各种非法输入的跳过逻辑。
+// TestParseTargets 覆盖 ip:port 解析(含 CIDR/段/逗号)及非法输入跳过。
+// 注意: 协议不再由 ParseTargets 决定(已废弃 |协议 与端口识别),
+// 所以 Protocol 字段应为空, 由调用方按 -m 填充。端口任意。
 func TestParseTargets(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -17,42 +19,37 @@ func TestParseTargets(t *testing.T) {
 		want    []*IpAddr
 	}{
 		{
-			name:    "by_port_mysql",
+			name:    "single_ip_port",
 			targets: []string{"1.2.3.4:3306"},
-			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 3306, Protocol: "mysql"}},
+			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 3306}},
 		},
 		{
-			name:    "by_port_redis",
-			targets: []string{"10.0.0.1:6379"},
-			want:    []*IpAddr{{Ip: "10.0.0.1", Port: 6379, Protocol: "redis"}},
+			name:    "nondefault_port_accepted", // 端口任意, 不再识别协议
+			targets: []string{"1.2.3.4:3307"},
+			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 3307}},
 		},
 		{
-			name:    "explicit_protocol_nondefault_port",
-			targets: []string{"1.2.3.4:3307|mysql"},
-			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 3307, Protocol: "mysql"}},
+			name:    "arbitrary_high_port",
+			targets: []string{"10.0.0.1:65535"},
+			want:    []*IpAddr{{Ip: "10.0.0.1", Port: 65535}},
 		},
 		{
-			name:    "explicit_wmihash",
-			targets: []string{"1.2.3.4:135|wmihash"},
-			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 135, Protocol: "wmihash"}},
-		},
-		{
-			name: "mixed_valid",
+			name: "mixed_ports",
 			targets: []string{
 				"1.2.3.4:3306",
-				"1.2.3.4:3307|mysql",
+				"1.2.3.4:3307",
 				"5.6.7.8:22",
 			},
 			want: []*IpAddr{
-				{Ip: "1.2.3.4", Port: 3306, Protocol: "mysql"},
-				{Ip: "1.2.3.4", Port: 3307, Protocol: "mysql"},
-				{Ip: "5.6.7.8", Port: 22, Protocol: "ssh"},
+				{Ip: "1.2.3.4", Port: 3306},
+				{Ip: "1.2.3.4", Port: 3307},
+				{Ip: "5.6.7.8", Port: 22},
 			},
 		},
 		{
 			name:    "trim_whitespace",
 			targets: []string{"  1.2.3.4:3306  "},
-			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 3306, Protocol: "mysql"}},
+			want:    []*IpAddr{{Ip: "1.2.3.4", Port: 3306}},
 		},
 		// 非法/应跳过的输入
 		{
@@ -71,69 +68,69 @@ func TestParseTargets(t *testing.T) {
 			want:    nil,
 		},
 		{
-			name:    "unknown_port_skipped",
-			targets: []string{"1.2.3.4:1234"},
+			name:    "non_numeric_port_skipped", // 端口非数字被跳过
+			targets: []string{"1.2.3.4:abc"},
 			want:    nil,
 		},
 		{
-			name:    "unknown_protocol_skipped",
-			targets: []string{"1.2.3.4:3306|notaproto"},
+			name:    "proto_suffix_now_skipped", // |协议 已废弃, 含 | 的端口解析失败被跳过
+			targets: []string{"1.2.3.4:3306|mysql"},
 			want:    nil,
 		},
 		{
 			name: "mixed_valid_and_invalid",
 			targets: []string{
 				"garbage",
-				"1.2.3.4:3306",      // valid
-				"1.2.3.4:1234",      // unknown port
-				"1.2.3.4:22|bogus",  // unknown proto
-				"5.5.5.5:6379",      // valid
+				"1.2.3.4:3306",     // valid
+				"1.2.3.4:abc",      // 非数字端口
+				"1.2.3.4:22|ssh",   // 旧 |协议 语法, 现被跳过
+				"5.5.5.5:6379",     // valid
 			},
 			want: []*IpAddr{
-				{Ip: "1.2.3.4", Port: 3306, Protocol: "mysql"},
-				{Ip: "5.5.5.5", Port: 6379, Protocol: "redis"},
+				{Ip: "1.2.3.4", Port: 3306},
+				{Ip: "5.5.5.5", Port: 6379},
 			},
 		},
 		{
 			name:    "cidr_expand",
 			targets: []string{"192.168.1.0/30:3306"},
 			want: []*IpAddr{
-				{Ip: "192.168.1.0", Port: 3306, Protocol: "mysql"},
-				{Ip: "192.168.1.1", Port: 3306, Protocol: "mysql"},
-				{Ip: "192.168.1.2", Port: 3306, Protocol: "mysql"},
-				{Ip: "192.168.1.3", Port: 3306, Protocol: "mysql"},
+				{Ip: "192.168.1.0", Port: 3306},
+				{Ip: "192.168.1.1", Port: 3306},
+				{Ip: "192.168.1.2", Port: 3306},
+				{Ip: "192.168.1.3", Port: 3306},
 			},
 		},
 		{
 			name:    "range_expand",
 			targets: []string{"10.0.0.10-12:6379"},
 			want: []*IpAddr{
-				{Ip: "10.0.0.10", Port: 6379, Protocol: "redis"},
-				{Ip: "10.0.0.11", Port: 6379, Protocol: "redis"},
-				{Ip: "10.0.0.12", Port: 6379, Protocol: "redis"},
+				{Ip: "10.0.0.10", Port: 6379},
+				{Ip: "10.0.0.11", Port: 6379},
+				{Ip: "10.0.0.12", Port: 6379},
 			},
 		},
 		{
-			name:    "cidr_with_explicit_protocol",
-			targets: []string{"172.16.0.0/31:445|smb"},
+			name:    "cidr_nondefault_port", // CIDR + 非默认端口(协议由 -m 定, 端口任意)
+			targets: []string{"172.16.0.0/31:445"},
 			want: []*IpAddr{
-				{Ip: "172.16.0.0", Port: 445, Protocol: "smb"},
-				{Ip: "172.16.0.1", Port: 445, Protocol: "smb"},
+				{Ip: "172.16.0.0", Port: 445},
+				{Ip: "172.16.0.1", Port: 445},
 			},
 		},
 		{
 			name: "comma_list_expand",
 			targets: []string{"10.0.0.1,10.0.0.2:22"},
 			want: []*IpAddr{
-				{Ip: "10.0.0.1", Port: 22, Protocol: "ssh"},
-				{Ip: "10.0.0.2", Port: 22, Protocol: "ssh"},
+				{Ip: "10.0.0.1", Port: 22},
+				{Ip: "10.0.0.2", Port: 22},
 			},
 		},
 		{
 			name:    "cidr_too_large_skipped",
 			targets: []string{"10.0.0.0/8:3306", "192.168.1.1:3306"},
 			want: []*IpAddr{
-				{Ip: "192.168.1.1", Port: 3306, Protocol: "mysql"},
+				{Ip: "192.168.1.1", Port: 3306},
 			},
 		},
 	}
@@ -158,42 +155,6 @@ func equalIpAddrs(a, b []*IpAddr) bool {
 		}
 	}
 	return true
-}
-
-// TestFilterModule 验证模块过滤。
-func TestFilterModule(t *testing.T) {
-	addrs := []*IpAddr{
-		{Ip: "1.1.1.1", Port: 3306, Protocol: "mysql"},
-		{Ip: "1.1.1.2", Port: 22, Protocol: "ssh"},
-		{Ip: "1.1.1.3", Port: 6379, Protocol: "redis"},
-		{Ip: "1.1.1.4", Port: 3307, Protocol: "mysql"},
-	}
-
-	// "all" 返回全部
-	if got := FilterModule(addrs, "all"); len(got) != len(addrs) {
-		t.Errorf("FilterModule(all) len = %d, want %d", len(got), len(addrs))
-	}
-
-	// 指定 mysql 只返回 mysql
-	got := FilterModule(addrs, "mysql")
-	if len(got) != 2 {
-		t.Fatalf("FilterModule(mysql) len = %d, want 2", len(got))
-	}
-	for _, a := range got {
-		if a.Protocol != "mysql" {
-			t.Errorf("FilterModule(mysql) returned non-mysql: %+v", a)
-		}
-	}
-
-	// 不存在的模块返回空
-	if got := FilterModule(addrs, "rdp"); len(got) != 0 {
-		t.Errorf("FilterModule(rdp) len = %d, want 0", len(got))
-	}
-
-	// 空输入返回空
-	if got := FilterModule(nil, "all"); len(got) != 0 {
-		t.Errorf("FilterModule(nil, all) len = %d, want 0", len(got))
-	}
 }
 
 // TestNewRunnerInjectsDefaults 验证 v0.1 关键改动:
@@ -295,39 +256,27 @@ func TestNewRunnerClampsInvalidOptions(t *testing.T) {
 	}
 }
 
-// TestProtocolRegistryConsistency 验证 PortNames 与 SupportProtocols 的一致性,
-// 以及 13 个协议全部受支持。
-func TestProtocolRegistryConsistency(t *testing.T) {
-	// 所有 PortNames 指向的协议必须在 SupportProtocols 中
-	for port, proto := range PortNames {
-		if !SupportProtocols[proto] {
-			t.Errorf("PortNames[%d]=%q is not in SupportProtocols", port, proto)
-		}
-	}
-
+// TestSupportedProtocols 验证支持的协议列表完整(13 个)且每个都被 IsSupportedProtocol 认可。
+// 已废弃端口识别, 协议完全由 -m 决定。
+func TestSupportedProtocols(t *testing.T) {
 	wantProtocols := []string{
 		"ftp", "ssh", "wmi", "wmihash", "smb", "mssql",
 		"oracle", "mysql", "rdp", "postgres", "redis", "memcached", "mongodb",
 	}
+	if len(SupportedProtocols) != 13 {
+		t.Errorf("SupportedProtocols has %d entries, want 13", len(SupportedProtocols))
+	}
 	for _, p := range wantProtocols {
-		if !SupportProtocols[p] {
-			t.Errorf("SupportProtocols missing %q", p)
+		if !IsSupportedProtocol(p) {
+			t.Errorf("IsSupportedProtocol(%q) = false, want true", p)
 		}
 	}
-	if len(SupportProtocols) != 13 {
-		t.Errorf("SupportProtocols has %d entries, want 13", len(SupportProtocols))
+	// 非法协议应返回 false
+	if IsSupportedProtocol("all") {
+		t.Error("IsSupportedProtocol(\"all\") should be false (all 已废弃)")
 	}
-
-	// 关键端口映射正确
-	keyPorts := map[int]string{
-		21: "ftp", 22: "ssh", 135: "wmi", 445: "smb", 1433: "mssql",
-		1521: "oracle", 3306: "mysql", 3389: "rdp", 5432: "postgres",
-		6379: "redis", 11211: "memcached", 27017: "mongodb",
-	}
-	for port, want := range keyPorts {
-		if got := PortNames[port]; got != want {
-			t.Errorf("PortNames[%d] = %q, want %q", port, got, want)
-		}
+	if IsSupportedProtocol("notaproto") {
+		t.Error("IsSupportedProtocol(\"notaproto\") should be false")
 	}
 }
 

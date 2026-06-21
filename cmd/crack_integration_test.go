@@ -121,7 +121,7 @@ func TestCLINoInput(t *testing.T) {
 // TestCLINonexistentUserFile 验证 --user-file 指向不存在文件时报错退出。
 func TestCLINonexistentUserFile(t *testing.T) {
 	ensureBinary(t)
-	out, code := runBinary(t, "-i", "127.0.0.1:3306", "--user-file", "/no/such/file.txt")
+	out, code := runBinary(t, "-i", "127.0.0.1:3306", "-m", "mysql", "--user-file", "/no/such/file.txt")
 	if code == 0 {
 		t.Error("crack with missing --user-file should exit non-zero")
 	}
@@ -140,11 +140,10 @@ func TestCLINonexistentInputFile(t *testing.T) {
 }
 
 // TestCLICrackDeadPortNoCrash 验证对一个连不上的目标完整跑完不 panic。
-// 用 |mysql 显式指定协议(ParseTargets 要求端口在 PortNames 或显式 |proto),
-// 端口 1 几乎必然无服务 → 存活数量 0。1s timeout 避免长时间阻塞。
+// 协议由 -m 指定(端口任意), 端口 1 几乎必然无服务 → 存活数量 0。1s timeout 避免长时间阻塞。
 func TestCLICrackDeadPortNoCrash(t *testing.T) {
 	ensureBinary(t)
-	out, code := runBinary(t, "-i", "127.0.0.1:1|mysql", "-m", "mysql",
+	out, code := runBinary(t, "-i", "127.0.0.1:1", "-m", "mysql",
 		"--user", "root", "--pass", "wrongpass", "--timeout", "1", "--threads", "1")
 	if code != 0 {
 		t.Errorf("crack dead port exit code = %d, want 0; out:\n%s", code, out)
@@ -154,42 +153,55 @@ func TestCLICrackDeadPortNoCrash(t *testing.T) {
 	}
 }
 
-// TestCLICrackMixedTargetFile 验证混合格式目标文件解析 + 存活探测进度数正确。
-// 通过存活探测日志间接验证 ParseTargets 处理了两种格式。
-func TestCLICrackMixedTargetFile(t *testing.T) {
+// TestCLIMissingModule 验证 -m 必填: 不传 -m 应报错非零退出。
+func TestCLIMissingModule(t *testing.T) {
 	ensureBinary(t)
-	// 写入混合格式目标文件
-	targets := []string{
-		"127.0.0.1:3306",        // 按端口识别 mysql
-		"127.0.0.1:3307|mysql",  // 显式协议
-		"127.0.0.1:6379",        // redis
-		"127.0.0.1:22",          // ssh
+	out, code := runBinary(t, "-i", "127.0.0.1:3306", "--user", "root", "--pass", "x")
+	if code == 0 {
+		t.Error("without -m should exit non-zero")
 	}
-	dir := t.TempDir()
-	tf := filepath.Join(dir, "targets.txt")
-	content := strings.Join(targets, "\n") + "\n"
-	if err := os.WriteFile(tf, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-	out, code := runBinary(t, "-f", tf, "-m", "all",
-		"--user", "root", "--pass", "x", "--timeout", "1", "--threads", "4")
-	if code != 0 {
-		t.Errorf("mixed file exit code = %d, want 0; out:\n%s", code, out)
-	}
-	// 进度条显示 4 / 4 表示 4 个目标都被解析并参与存活探测
-	if !strings.Contains(out, "4 / 4") {
-		t.Errorf("expected progress '4 / 4' (all targets parsed); got:\n%s", out)
+	if !strings.Contains(out, "必须用 -m") {
+		t.Errorf("expected '必须用 -m' error; got:\n%s", out)
 	}
 }
 
-// TestCLICrackModuleFilter 验证 -m 过滤: 只对匹配协议的目标做存活探测。
-func TestCLICrackModuleFilter(t *testing.T) {
+// TestCLIInvalidModule 验证 -m 传非法协议时报错非零。
+func TestCLIInvalidModule(t *testing.T) {
 	ensureBinary(t)
+	out, code := runBinary(t, "-i", "127.0.0.1:3306", "-m", "notaproto", "--user", "root", "--pass", "x")
+	if code == 0 {
+		t.Error("invalid -m should exit non-zero")
+	}
+	if !strings.Contains(out, "不支持的模块") {
+		t.Errorf("expected '不支持的模块' error; got:\n%s", out)
+	}
+}
+
+// TestCLILegacyProtoSyntaxSkipped 验证旧的 |协议 语法已废弃:
+// -i 'ip:port|proto' 现在被解析为非法端口(含 |) → 目标为空。
+func TestCLILegacyProtoSyntaxSkipped(t *testing.T) {
+	ensureBinary(t)
+	out, code := runBinary(t, "-i", "127.0.0.1:3306|mysql", "-m", "mysql",
+		"--user", "root", "--pass", "x", "--timeout", "1")
+	// 目标被跳过 → "目标为空", 但程序正常退出 exit 0
+	if code != 0 {
+		t.Errorf("legacy syntax exit code = %d, want 0; out:\n%s", code, out)
+	}
+	if !strings.Contains(out, "目标为空") {
+		t.Errorf("expected '目标为空' for legacy |proto syntax; got:\n%s", out)
+	}
+}
+
+// TestCLICrackMixedTargetFile 验证目标文件解析 + 存活探测进度数正确。
+// 协议由 -m 统一指定, 目标文件只放 ip:port(含 CIDR/段/逗号)。
+func TestCLICrackMixedTargetFile(t *testing.T) {
+	ensureBinary(t)
+	// 写入多种 ip 格式(端口不同, 但协议都由 -m mysql 指定)
 	targets := []string{
-		"127.0.0.1:3306",       // mysql
-		"127.0.0.1:3307|mysql", // mysql
-		"127.0.0.1:6379",       // redis (应被 -m mysql 过滤掉)
-		"127.0.0.1:22",         // ssh (应被过滤掉)
+		"127.0.0.1:3306",       // 单 ip 标准端口
+		"127.0.0.1:3307",       // 单 ip 非标准端口(协议仍由 -m 定)
+		"127.0.0.1,127.0.0.2:3306", // 逗号列表
+		"127.0.0.1-2:3306",     // IP 段
 	}
 	dir := t.TempDir()
 	tf := filepath.Join(dir, "targets.txt")
@@ -200,11 +212,11 @@ func TestCLICrackModuleFilter(t *testing.T) {
 	out, code := runBinary(t, "-f", tf, "-m", "mysql",
 		"--user", "root", "--pass", "x", "--timeout", "1", "--threads", "4")
 	if code != 0 {
-		t.Errorf("module filter exit code = %d, want 0; out:\n%s", code, out)
+		t.Errorf("mixed file exit code = %d, want 0; out:\n%s", code, out)
 	}
-	// -m mysql 应只保留 2 个 mysql 目标
-	if !strings.Contains(out, "2 / 2") {
-		t.Errorf("expected progress '2 / 2' for -m mysql; got:\n%s", out)
+	// 展开后: 3306(1) + 3307(1) + 逗号列表(2) + IP段(2) = 6 个目标
+	if !strings.Contains(out, "6 / 6") {
+		t.Errorf("expected progress '6 / 6' (all targets parsed); got:\n%s", out)
 	}
 }
 
@@ -213,8 +225,8 @@ func TestCLIResultFileExport(t *testing.T) {
 	ensureBinary(t)
 	dir := t.TempDir()
 	resultFile := filepath.Join(dir, "found.json")
-	// 用 |mysql 显式协议 + 死端口, 确保 ParseTargets 产出目标并走到结果保存阶段
-	cmd := exec.Command(binaryPath, "-i", "127.0.0.1:1|mysql", "-m", "mysql",
+	// 协议由 -m 指定 + 死端口, 确保 ParseTargets 产出目标并走到结果保存阶段
+	cmd := exec.Command(binaryPath, "-i", "127.0.0.1:1", "-m", "mysql",
 		"--user", "root", "--pass", "x", "--timeout", "1",
 		"--result", resultFile)
 	cmd.Dir = dir

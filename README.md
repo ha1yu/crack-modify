@@ -2,7 +2,7 @@
 
 常见服务弱口令爆破工具，从 [zpscan](https://github.com/niudaii/zpscan) 的 `crack` 模块剥离而来，作为独立可编译的命令行工具，去掉了对其余模块（webscan / ipscan / dirscan / domainscan / pocscan）以及 `config.yaml` 的依赖。
 
-> 当前版本：**v1.2.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
+> 当前版本：**v1.3.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 
 ## 构建
 
@@ -25,9 +25,20 @@
 
 > 单平台快速编译：`GOTOOLCHAIN=go1.20.14 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o crack-modify .`
 
+## 网页配置工具
+
+不想手敲命令？用 `crack.html`：浏览器双击打开，勾选参数实时生成命令，一键复制到终端执行。
+
+- 13 协议场景预设按钮（点一下自动填 module + 常见默认用户名，默认 ssh）
+- 目标/模块/用户/口令/线程/超时/限速/开关 全表单化
+- 特殊字符自动加引号；默认值智能省略，命令简洁
+- 纯前端单文件，无后端、无外部依赖（离线可用）
+
+> 生成的是 crack-modify 执行命令，复制后自行在终端运行。
+
 ## 功能
 
-- 支持默认端口协议和自定义协议爆破：`127.0.0.1:3306`（按端口识别 mysql）、`127.0.0.1:3307|mysql`（显式指定协议）
+- 协议由 `-m` 指定，端口任意：`127.0.0.1:3306 -m mysql`、`127.0.0.1:3307 -m mysql`（不再依赖端口识别或 `|协议` 后缀）
 - 支持常见服务口令爆破与未授权检测：`ftp, ssh, wmi, wmihash, smb, mssql, oracle, mysql, rdp, postgres, redis, memcached, mongodb`
 - 内置默认用户名 / 模板口令 / 常用口令字典，也支持 `--user/--pass/--user-file/--pass-file` 自定义
 - 存活探测 → 协议爆破，多线程 + 命中即停（`--crack-all` 可爆破全部），支持 `--delay` 限速
@@ -47,7 +58,7 @@ Flags:
       --delay int           请求间隔(秒, 0 关闭限速)
   -i, --input string        单个目标(例: -i '127.0.0.1:3306' 或 '192.168.1.0/24:445')
   -f, --input-file string   目标文件,每行一个(例: -f 'targets.txt')
-  -m, --module string       指定爆破模块(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb) (default "all")
+  -m, --module string       必填: 指定爆破模块(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb)。协议由此决定, 端口任意
       --no-color            关闭彩色输出
   -o, --output string       日志与结果输出文件 (default "result.txt")
       --pass string         口令,逗号分隔(例: --pass 'admin,root')
@@ -66,11 +77,11 @@ Flags:
 # 编译
 go build -o crack-modify .
 
-# 单个目标（按端口识别协议）
+# 单个目标（协议由 -m 指定）
 ./crack-modify -i 127.0.0.1:3306 -m mysql --threads 4 --timeout 5
 
 # 指定协议（非默认端口）
-./crack-modify -i '127.0.0.1:3307|mysql' -m mysql
+./crack-modify -i 127.0.0.1:3307 -m mysql   # 非标准端口也由 -m 指定协议
 
 # CIDR / IP 段多目标（自动展开）
 ./crack-modify -i '192.168.1.0/24:445' -m smb --threads 20
@@ -78,7 +89,7 @@ go build -o crack-modify .
 ./crack-modify -i '10.0.0.1,10.0.0.5:22' -m ssh
 
 # 目标文件，混合多种格式
-./crack-modify -f targets.txt -m all --threads 10
+./crack-modify -f targets.txt -m mysql --threads 10   # 协议由 -m 决定(all 已废弃, 多协议需分次跑)
 
 # 密码喷洒（防账户锁定，配合 --delay）
 ./crack-modify -f ad_targets.txt -m smb --user-file users.txt --pass 'Spring2024,P@ssw0rd' --spray --delay 2 --threads 1
@@ -87,11 +98,11 @@ go build -o crack-modify .
 ./crack-modify -f targets.txt --user-file user.txt --pass-file pass.txt --crack-all --result found.json
 ```
 
-`targets.txt` 每行一个目标，支持单 IP / CIDR / IP 段 / 逗号列表：
+`targets.txt` 每行一个目标（`ip:port`），支持单 IP / CIDR / IP 段 / 逗号列表（协议由 `-m` 统一指定）：
 
 ```
 127.0.0.1:3306
-127.0.0.1:3307|mysql
+127.0.0.1:3307
 192.168.1.0/24:445          # CIDR（最多 /24，防误爆）
 10.0.0.1-128:3306           # IP 段
 10.0.0.1,10.0.0.2:22        # 逗号列表

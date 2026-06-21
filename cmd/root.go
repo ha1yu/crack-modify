@@ -122,6 +122,13 @@ func (o *CommonOptions) configureOptions() error {
 
 // validateOptions 验证爆破选项
 func (o *CrackOptions) validateOptions() error {
+	// -m 必填且必须是合法协议(已废弃 all 与端口识别)
+	if o.Module == "" {
+		return fmt.Errorf("必须用 -m 指定爆破模块(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb)")
+	}
+	if !crack.IsSupportedProtocol(o.Module) {
+		return fmt.Errorf("不支持的模块 %q, 可选: ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb", o.Module)
+	}
 	if o.UserFile != "" && !utils.FileExists(o.UserFile) {
 		return fmt.Errorf("文件 %v 不存在", o.UserFile)
 	}
@@ -177,7 +184,10 @@ func (o *CrackOptions) run() error {
 		return fmt.Errorf("crack.NewRunner() err, %w", err)
 	}
 	addrs := crack.ParseTargets(targets)
-	addrs = crack.FilterModule(addrs, o.Module)
+	// 协议完全由 -m 决定(已废弃 |协议 与端口识别): 给每个目标填上 -m 指定的协议, 端口任意
+	for _, a := range addrs {
+		a.Protocol = o.Module
+	}
 	if len(addrs) == 0 {
 		gologger.Error().Msgf("目标为空")
 		return nil
@@ -216,7 +226,7 @@ func Execute() {
 	rootCmd.Flags().BoolVar(&commonOptions.Debug, "debug", false, "显示调试输出")
 
 	// 爆破 flag
-	rootCmd.Flags().StringVarP(&crackOptions.Module, "module", "m", "all", "指定爆破模块(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb)")
+	rootCmd.Flags().StringVarP(&crackOptions.Module, "module", "m", "", "必填: 指定爆破模块(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb)。协议由此决定, 端口任意")
 	rootCmd.Flags().StringVar(&crackOptions.User, "user", "", "用户名,逗号分隔(例: --user 'admin,root')")
 	rootCmd.Flags().StringVar(&crackOptions.Pass, "pass", "", "口令,逗号分隔(例: --pass 'admin,root')")
 	rootCmd.Flags().StringVar(&crackOptions.UserFile, "user-file", "", "用户名字典文件(例: --user-file 'user.txt')")

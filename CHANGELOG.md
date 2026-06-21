@@ -7,6 +7,40 @@
 
 ## [Unreleased]
 
+## [v1.3.0] - 2026-06-22 ⚠️ 破坏性变更
+
+相对 [v1.2.0](#v120---2026-06-21)，**消除目标输入的歧义**：协议完全由 `-m` 决定，不再支持 `|协议` 后缀，也不再按端口自动识别。
+
+### ⚠️ 破坏性变更（Breaking）
+
+- **废弃 `ip:port|协议` 语法**：`-i '127.0.0.1:3307|mysql'` 不再支持（含 `|` 的端口会被当非法跳过）。协议改由 `-m` 指定。
+- **废弃 `-m all`**：`-m` 现在必填具体协议（mysql/ssh/...）。原来一次 `-m all` 跑多协议混合目标，现在需分多次（每次一个 `-m`）。
+- **废弃端口→协议自动识别**：不再有"3306 自动识别为 mysql"的行为。目标的协议完全由 `-m` 决定，**端口任意**（mysql 在 3307、65535 都行，只要 `-m mysql`）。
+- **迁移指南**：
+  - `crack-modify -i '127.0.0.1:3307|mysql'` → `crack-modify -i 127.0.0.1:3307 -m mysql`
+  - `crack-modify -f targets.txt -m all` → `crack-modify -f targets.txt -m mysql`（再 `-m ssh` 各跑一次）
+  - `crack-modify -i 127.0.0.1:3306`（原靠端口识别）→ `crack-modify -i 127.0.0.1:3306 -m mysql`（必须显式 -m）
+
+### 变更
+
+- `pkg/crack/parse.go`：`ParseTargets` 只解析 `ip:port`（含 CIDR/段/逗号展开），不再切 `|协议`、不再查端口表；目标 `Protocol` 字段留空，由调用方按 `-m` 填充。删除 `FilterModule`（不再需要过滤）。
+- `pkg/crack/config.go`：删除 `PortNames`（端口映射）与 `SupportProtocols`（旧 map），新增导出的 `SupportedProtocols` 切片 + `IsSupportedProtocol()` 供 `-m` 合法性校验。
+- `cmd/root.go`：`-m` 默认值改为空（**必填**），`validateOptions` 校验 `-m` 非空且合法；`run()` 里给每个解析出的目标填上 `-m` 指定的协议（替代原 `FilterModule`）。
+- 测试同步更新：`crack_test.go`（`ParseTargets` 用例改为协议留空、删 `TestFilterModule`、新增 `TestSupportedProtocols`）；`integration_test.go`（去 `|mysql`/`-m all`、删 `TestCLICrackModuleFilter`、新增 `-m` 必填/非法/旧语法废弃 3 个测试）。
+- **新增 `crack.html` 命令配置页**：纯前端单文件（双击浏览器打开），13 协议场景预设按钮、表单勾选实时生成命令、一键复制。
+  - module 下拉默认选中 `ssh`；去掉 `all` 选项；`-i` 框 placeholder 与帮助卡片移除 `|协议` 与端口映射表，说明改为"协议由 `-m` 决定，端口任意"。
+- README 示例与 help 输出块同步更新。
+
+### 为什么这样改
+
+原设计里"协议"有三个来源（`-m` 过滤、`|协议` 标注、端口识别），语义重叠且易混淆（见用户反馈："-m mysql 是不是就不用 |mysql 了"）。现统一为**单一来源 `-m`**，目标输入只剩 `ip:port`，彻底无歧义。
+
+### 验证
+
+- `go vet ./...` 干净；`go test ./...` 4 包全绿、103 用例全 PASS。
+- `go test -race` 无数据竞争。
+- 远程跨公网测试（mysql/ssh/redis 等真实服务）+ `-m` 必填/非法协议/旧 `|协议` 废弃 全部符合预期。
+
 ## [v1.2.0] - 2026-06-21
 
 相对 [v1.1.0](#v110---2026-06-21)，简化 CLI 结构（去掉子命令层）、修正退出码行为、加固 Docker 测试稳定性。

@@ -1,37 +1,21 @@
 package crack
 
-var (
-	PortNames = map[int]string{
-		21:    "ftp",
-		22:    "ssh",
-		135:   "wmi",
-		445:   "smb",
-		1433:  "mssql",
-		1521:  "oracle",
-		3306:  "mysql",
-		3389:  "rdp",
-		5432:  "postgres",
-		6379:  "redis",
-		11211: "memcached",
-		27017: "mongodb",
-	}
+// SupportedProtocols 是所有支持的爆破协议(由 -m 指定)。
+// 已废弃按端口自动识别协议, 协议完全由 -m 决定, 端口任意。
+var SupportedProtocols = []string{
+	"ftp", "ssh", "wmi", "wmihash", "smb", "mssql",
+	"oracle", "mysql", "rdp", "postgres", "redis", "memcached", "mongodb",
+}
 
-	SupportProtocols = map[string]bool{
-		"ftp":       true,
-		"ssh":       true,
-		"wmi":       true,
-		"wmihash":   true,
-		"smb":       true,
-		"mssql":     true,
-		"oracle":    true,
-		"mysql":     true,
-		"rdp":       true,
-		"postgres":  true,
-		"redis":     true,
-		"memcached": true,
-		"mongodb":   true,
+// IsSupportedProtocol 判断 name 是否为合法协议。
+func IsSupportedProtocol(name string) bool {
+	for _, p := range SupportedProtocols {
+		if p == name {
+			return true
+		}
 	}
-)
+	return false
+}
 
 var (
 	userMap = map[string][]string{
