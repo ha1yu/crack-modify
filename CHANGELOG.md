@@ -5,8 +5,6 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
-
 ## [v1.3.0] - 2026-06-22 ⚠️ 破坏性变更
 
 相对 [v1.2.0](#v120---2026-06-21)，**消除目标输入的歧义**：协议完全由 `-m` 决定，不再支持 `|协议` 后缀，也不再按端口自动识别。
