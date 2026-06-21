@@ -2,7 +2,7 @@
 
 常见服务弱口令爆破工具，从 [zpscan](https://github.com/niudaii/zpscan) 的 `crack` 模块剥离而来，作为独立可编译的命令行工具，去掉了对其余模块（webscan / ipscan / dirscan / domainscan / pocscan）以及 `config.yaml` 的依赖。
 
-> 当前版本：**v1.3.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
+> 版本日志详见 [CHANGELOG.md](./CHANGELOG.md)
 
 ## 构建
 
@@ -164,8 +164,3 @@ CRACK_DOCKER_TEST=1 go test ./pkg/crack/plugins/ -run TestDocker -count=1 -v -ti
 当前覆盖率（不含 Docker 可选测试）：`pkg/crack` 97.3%、`plugins` 51.1%、`internal/utils` 40%、`cmd` 10.6%（CLI 分支较多，以集成测试保证行为）。
 
 > **Docker 集成测试**通过环境变量 `CRACK_DOCKER_TEST=1` 显式开启，默认跳过——确保无 Docker 的 CI 环境 `go test ./...` 仍 100% 绿。覆盖 mysql/postgres/mssql/redis/memcached/ftp/ssh/mongodb/oracle/smb 共 10 个协议的真实 success/fail/error 三态；`wmi`/`wmihash`/`rdp` 因需 Windows 目标未纳入。
-
-## 说明
-
-- 不再需要上游的 `config.yaml` 与 `resource.zip`。未指定字典时，自动使用 `pkg/crack/config.go` 内置的 `userMap` / `templatePass` / `commonPass`。
-- 协议返回约定：`CrackError`（连接/网络错误，停止该目标）、`CrackFail`（口令错误，继续）、`CrackSuccess`（命中）。
