@@ -2,7 +2,7 @@
 
 常见服务弱口令爆破工具，从 [zpscan](https://github.com/niudaii/zpscan) 的 `crack` 模块剥离而来，作为独立可编译的命令行工具，去掉了对其余模块（webscan / ipscan / dirscan / domainscan / pocscan）以及 `config.yaml` 的依赖。
 
-> 当前版本：**v1.1.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
+> 当前版本：**v1.2.0**　|　变更记录见 [CHANGELOG.md](./CHANGELOG.md)
 
 ## 构建
 
@@ -35,28 +35,29 @@
 ## 使用
 
 ```
-crack-modify crack -h
+crack-modify -h
 常见服务弱口令爆破,支持ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb
 
-Flags:
-      --crack-all          crack all user:pass
-      --delay int          delay between requests in seconds (0 to disable)
-      --spray              password spraying mode: one password against all users before next (reduces lockout risk)
-  -m, --module string      choose one module to crack(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb) (default "all")
-      --pass string        pass(example: --pass 'admin,root')
-      --pass-file string   pass file(example: --pass-file 'pass.txt')
-      --threads int        number of threads (default 1)
-      --timeout int        timeout in seconds (default 10)
-      --user string        user(example: --user 'admin,root')
-      --user-file string   user file(example: --user-file 'user.txt')
+Usage:
+  crack-modify [flags]
 
-Global Flags:
-      --debug               show debug output
-  -i, --input string        single input(example: -i 'xxx')
-  -f, --input-file string   inputs file(example: -f 'xxx.txt')
-      --no-color            disable colors in output
-  -o, --output string       output file to write log and results (default "result.txt")
-      --result string       output file to write found results
+Flags:
+      --crack-all           命中后继续爆破该目标的全部口令
+      --debug               显示调试输出
+      --delay int           请求间隔(秒, 0 关闭限速)
+  -i, --input string        单个目标(例: -i '127.0.0.1:3306' 或 '192.168.1.0/24:445')
+  -f, --input-file string   目标文件,每行一个(例: -f 'targets.txt')
+  -m, --module string       指定爆破模块(ftp,ssh,wmi,wmihash,smb,mssql,oracle,mysql,rdp,postgres,redis,memcached,mongodb) (default "all")
+      --no-color            关闭彩色输出
+  -o, --output string       日志与结果输出文件 (default "result.txt")
+      --pass string         口令,逗号分隔(例: --pass 'admin,root')
+      --pass-file string    口令字典文件(例: --pass-file 'pass.txt')
+      --result string       命中结果导出文件(JSON)
+      --spray               密码喷洒模式: 每个口令先遍历全部用户再换下一个(防账户锁定, 配合 --delay)
+      --threads int         并发线程数 (default 1)
+      --timeout int         单次连接超时(秒) (default 10)
+      --user string         用户名,逗号分隔(例: --user 'admin,root')
+      --user-file string    用户名字典文件(例: --user-file 'user.txt')
 ```
 
 ### 示例
@@ -66,24 +67,24 @@ Global Flags:
 go build -o crack-modify .
 
 # 单个目标（按端口识别协议）
-./crack-modify crack -i 127.0.0.1:3306 -m mysql --threads 4 --timeout 5
+./crack-modify -i 127.0.0.1:3306 -m mysql --threads 4 --timeout 5
 
 # 指定协议（非默认端口）
-./crack-modify crack -i '127.0.0.1:3307|mysql' -m mysql
+./crack-modify -i '127.0.0.1:3307|mysql' -m mysql
 
 # CIDR / IP 段多目标（自动展开）
-./crack-modify crack -i '192.168.1.0/24:445' -m smb --threads 20
-./crack-modify crack -i '10.0.0.1-128:3306' -m mysql --threads 10
-./crack-modify crack -i '10.0.0.1,10.0.0.5:22' -m ssh
+./crack-modify -i '192.168.1.0/24:445' -m smb --threads 20
+./crack-modify -i '10.0.0.1-128:3306' -m mysql --threads 10
+./crack-modify -i '10.0.0.1,10.0.0.5:22' -m ssh
 
 # 目标文件，混合多种格式
-./crack-modify crack -f targets.txt -m all --threads 10
+./crack-modify -f targets.txt -m all --threads 10
 
 # 密码喷洒（防账户锁定，配合 --delay）
-./crack-modify crack -f ad_targets.txt -m smb --user-file users.txt --pass 'Spring2024,P@ssw0rd' --spray --delay 2 --threads 1
+./crack-modify -f ad_targets.txt -m smb --user-file users.txt --pass 'Spring2024,P@ssw0rd' --spray --delay 2 --threads 1
 
 # 自定义字典，命中后继续爆破该目标的所有口令，结果写入 JSON
-./crack-modify crack -f targets.txt --user-file user.txt --pass-file pass.txt --crack-all --result found.json
+./crack-modify -f targets.txt --user-file user.txt --pass-file pass.txt --crack-all --result found.json
 ```
 
 `targets.txt` 每行一个目标，支持单 IP / CIDR / IP 段 / 逗号列表：

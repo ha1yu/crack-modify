@@ -172,7 +172,7 @@ func waitTCP(t *testing.T, host string, port int, timeout time.Duration) {
 
 func TestDockerMysqlCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 13306
+	const port = 33306
 	startContainer(t, containerSpec{
 		image: "mysql:5.7", name: "cm-mysql",
 		hostPort: port, guestPort: 3306,
@@ -205,7 +205,7 @@ func TestDockerMysqlCrack(t *testing.T) {
 
 func TestDockerPostgresCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 15432
+	const port = 35432
 	startContainer(t, containerSpec{
 		image: "postgres:13", name: "cm-pg",
 		hostPort: port, guestPort: 5432,
@@ -233,7 +233,7 @@ func TestDockerPostgresCrack(t *testing.T) {
 
 func TestDockerRedisCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 16379
+	const port = 36379
 	// 通过 cmd 覆盖, 启动时设置 requirepass
 	startContainer(t, containerSpec{
 		image: "redis:6", name: "cm-redis",
@@ -260,7 +260,7 @@ func TestDockerRedisCrack(t *testing.T) {
 
 func TestDockerMemcachedCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 21211
+	const port = 31211
 	startContainer(t, containerSpec{
 		image: "memcached:1.6", name: "cm-memcached",
 		hostPort: port, guestPort: 11211,
@@ -277,7 +277,7 @@ func TestDockerMemcachedCrack(t *testing.T) {
 
 func TestDockerFtpCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 10021
+	const port = 30021
 	// delfer/alpine-ftp-server: 默认用户 user/userpass, 需设 USERS 环境变量
 	startContainer(t, containerSpec{
 		image: "delfer/alpine-ftp-server:latest", name: "cm-ftp",
@@ -305,7 +305,7 @@ func TestDockerFtpCrack(t *testing.T) {
 
 func TestDockerSshCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 10022
+	const port = 30022
 	// linuxserver/openssh-server: 需设 USER_NAME/USER_PASSWORD/PASSWORD_ACCESS
 	startContainer(t, containerSpec{
 		image: "linuxserver/openssh-server:latest", name: "cm-ssh",
@@ -339,7 +339,7 @@ func TestDockerSshCrack(t *testing.T) {
 
 func TestDockerMssqlCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 11433
+	const port = 31433
 	// SA 密码需满足强密码策略(大小写+数字+符号)
 	startContainer(t, containerSpec{
 		image: "mcr.microsoft.com/mssql/server:2019-latest", name: "cm-mssql",
@@ -370,7 +370,7 @@ func TestDockerMssqlCrack(t *testing.T) {
 
 func TestDockerMongodbCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 27017
+	const port = 37017
 	// mongo:3.6 兼容 mgo 旧协议。开启 auth 需要 keyfile/root 用户, 较繁琐;
 	// 这里用无 auth 模式, 验证未授权探测路径(unauth 命中)。
 	startContainer(t, containerSpec{
@@ -390,7 +390,7 @@ func TestDockerMongodbCrack(t *testing.T) {
 
 func TestDockerOracleCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 11521
+	const port = 31521
 	// gvenzl/oracle-xe: 默认 SYSTEM/OracleXE 密码可由 APP_USER_PASSWORD 或 ORACLE_PASSWORD 配置
 	startContainer(t, containerSpec{
 		image: "gvenzl/oracle-xe:11-slim", name: "cm-oracle",
@@ -425,7 +425,7 @@ func TestDockerOracleCrack(t *testing.T) {
 
 func TestDockerSmbCrack(t *testing.T) {
 	dockerEnabled(t)
-	const port = 10445
+	const port = 30445
 	// dperson/samba: 设置 SMB 用户与共享
 	startContainer(t, containerSpec{
 		image: "dperson/samba:latest", name: "cm-smb",
